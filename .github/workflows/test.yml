@@ -1,0 +1,22 @@
+name: Fork Shell CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Syntax check
+        run: sh -n fork.sh
+
+      - name: Run tests
+        run: sh test.sh
