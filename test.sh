@@ -13,10 +13,11 @@ set -eu
 
 FAST=0
 VERBOSE=0
+USE_CACHE=1
 ORIG_ARGS="$*"
 
 usage() {
-  printf '%s\n' "Usage: $0 [--fast|-f] [--verbose|-v]"
+  printf '%s\n' "Usage: $0 [--fast|-f] [--verbose|-v] [--no-cache|-n]"
 }
 
 while [ "$#" -gt 0 ]; do
@@ -26,6 +27,9 @@ while [ "$#" -gt 0 ]; do
     ;;
   --verbose|-v|verbose)
     VERBOSE=1
+    ;;
+  --no-cache|-n|nocache|no-cache)
+    USE_CACHE=0
     ;;
   --help|-h)
     usage
@@ -103,7 +107,7 @@ if ! command -v git >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ "${FORK_TEST_CACHE_PHASE:-0}" -ne 1 ]; then
+if [ "$USE_CACHE" -eq 1 ] && [ "${FORK_TEST_CACHE_PHASE:-0}" -ne 1 ]; then
   if [ -n "${FORK_CACHE_PATH:-}" ]; then
     cache_dir="$FORK_CACHE_PATH"
   elif [ -n "${XDG_CACHE_HOME:-}" ]; then
