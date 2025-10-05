@@ -13,11 +13,11 @@
 #   main        Go to main worktree
 #   rm [branch...] [-f|--force] [-a|--all]
 #               Remove worktree(s) (current if no branch given)
-#               -f: force removal of unmerged branches
+#               -f: force removal of unmerged or dirty branches
 #               -a: remove all worktrees
-#   ls [-m|--merged] [-u|--unmerged]
+#   ls [-m|--merged] [-u|--unmerged] [-d|--dirty] [-c|--clean]
 #               List worktrees (default: all)
-#   clean       Remove merged worktrees
+#   clean       Remove merged and clean worktrees
 #   sh <bash|zsh|fish>
 #               Output shell integration function
 #   help [-v|--verbose]
@@ -61,9 +61,10 @@ Commands:
   co <branch>                             Change to worktree
   go <branch> [-t|--target <base>]        Change to worktree (create if needed)
   main                                    Go to main worktree
-  rm [branch...] [-f|--force] [-a|--all]  Remove worktree(s)
-  ls [-m|--merged] [-u|--unmerged]        List worktrees
-  clean                                   Remove merged worktrees
+  rm [branch...] [-f|--force] [-a|--all]     Remove worktree(s)
+  ls [-m|--merged] [-u|--unmerged] [-d|--dirty] [-c|--clean]
+                                              List worktrees
+  clean                                   Remove merged and clean worktrees
   sh [bash|zsh|fish]                      Output shell integration function
   help [-v|--verbose]                     Show help
 
@@ -108,14 +109,20 @@ Commands:
 
   rm [branch...] [-f] [-a|--all]
       Remove worktree(s). Defaults to current. Use -a for all.
-      -f, --force Force removal of unmerged branches
+      Worktrees are protected if unmerged or dirty (uncommitted/untracked changes).
+      -f, --force Force removal of unmerged or dirty branches
       -a, --all   Remove all worktrees
 
-  ls [-m|--merged] [-u|--unmerged]
-      List worktrees. Default: all. Output: <branch> <status> <path>
+  ls [-m|--merged] [-u|--unmerged] [-d|--dirty] [-c|--clean]
+      List worktrees. Default: all. Output: <branch> <merge_status> <dirty_status> <path>
+      -m, --merged   List only merged worktrees
+      -u, --unmerged List only unmerged worktrees
+      -d, --dirty    List only dirty worktrees (uncommitted/untracked changes)
+      -c, --clean    List only clean worktrees
 
   clean
-      Remove merged worktrees.
+      Remove merged and clean worktrees. Worktrees with uncommitted changes,
+      staged changes, or untracked files are automatically skipped.
 
   sh [bash|zsh|fish]
       Output shell integration function. If no shell specified, detects from $SHELL.
@@ -145,7 +152,9 @@ Examples:
   fork ls                              List all worktrees
   fork ls -u                           List unmerged worktrees
   fork ls -m                           List merged worktrees
-  fork clean                           Remove merged worktrees
+  fork ls -d                           List dirty worktrees
+  fork ls -c                           List clean worktrees
+  fork clean                           Remove merged and clean worktrees
   fork sh                              Output shell integration (auto-detect from $SHELL)
   fork sh bash                         Output shell integration for bash/zsh
 EOF
@@ -406,14 +415,16 @@ remove_single_worktree() {
 		return 1
 	fi
 
-	# Check if branch is merged (unless force flag is set)
-	if [ $force -eq 0 ] && ! is_branch_merged "$branch"; then
-		printf '%s\n' "Error: branch '$branch' is not merged. Use -f to force removal." >&2
-		return 1
-	fi
+	if [ $force -eq 0 ]; then
+		if ! is_branch_merged "$branch"; then
+			printf '%s\n' "Error: branch '$branch' is not merged. Use -f to force removal." >&2
+			return 1
+		fi
 
-	if is_worktree_dirty "$path"; then
-		printf '%s\n' "Warning: worktree '$branch' has uncommitted changes" >&2
+		if is_worktree_dirty "$path"; then
+			printf '%s\n' "Error: worktree '$branch' has uncommitted changes. Use -f to force removal." >&2
+			return 1
+		fi
 	fi
 
 	git worktree remove "$path" 2>/dev/null || git worktree remove --force "$path"
@@ -512,6 +523,7 @@ cmd_rm() {
 
 cmd_list() {
 	filter_mode="all"
+	filter_dirty=""
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
@@ -521,6 +533,14 @@ cmd_list() {
 			;;
 		-u | --unmerged)
 			filter_mode="unmerged"
+			shift
+			;;
+		-d | --dirty)
+			filter_dirty="dirty"
+			shift
+			;;
+		-c | --clean)
+			filter_dirty="clean"
 			shift
 			;;
 		*)
@@ -564,6 +584,11 @@ cmd_list() {
 				merged=1
 			fi
 
+			dirty=0
+			if is_worktree_dirty "$path"; then
+				dirty=1
+			fi
+
 			show=0
 			if [ "$filter_mode" = "all" ]; then
 				show=1
@@ -573,10 +598,20 @@ cmd_list() {
 				show=1
 			fi
 
+			if [ $show -eq 1 ] && [ -n "$filter_dirty" ]; then
+				if [ "$filter_dirty" = "dirty" ] && [ $dirty -eq 0 ]; then
+					show=0
+				elif [ "$filter_dirty" = "clean" ] && [ $dirty -eq 1 ]; then
+					show=0
+				fi
+			fi
+
 			if [ $show -eq 1 ]; then
-				status="unmerged"
-				[ $merged -eq 1 ] && status="merged"
-				printf '%s\t%s\t%s\n' "$branch" "$status" "$path" >>"$tmpfile"
+				merge_status="unmerged"
+				[ $merged -eq 1 ] && merge_status="merged"
+				dirty_status="clean"
+				[ $dirty -eq 1 ] && dirty_status="dirty"
+				printf '%s\t%s\t%s\t%s\n' "$branch" "$merge_status" "$dirty_status" "$path" >>"$tmpfile"
 			fi
 			;;
 		esac
@@ -640,7 +675,7 @@ cmd_clean() {
 
 		case "$path" in
 		"$worktree_base"/*)
-			if is_branch_merged "$branch"; then
+			if is_branch_merged "$branch" && ! is_worktree_dirty "$path"; then
 				if [ -n "$current_branch" ] && [ "$branch" = "$current_branch" ] && [ -n "$current_worktree_path" ] && [ "$path" = "$current_worktree_path" ]; then
 					current_entry="$path|$branch"
 				else

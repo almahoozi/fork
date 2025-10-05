@@ -63,7 +63,7 @@ fork co one             # switch to `one` worktree
 fork new dev -t develop # create from develop branch
 
 fork ls                 # list worktrees
-fork clean              # remove merged worktrees
+fork clean              # remove merged and clean worktrees
 ```
 
 ## Commands
@@ -90,17 +90,27 @@ fork main            # go to main worktree
 fork ls              # list all worktrees
 fork ls -u           # list unmerged only
 fork ls -m           # list merged only
+fork ls -d           # list dirty worktrees (uncommitted/untracked changes)
+fork ls -c           # list clean worktrees
 ```
+
+Output format: `<branch>  <merge_status>  <dirty_status>  <path>`
 
 ### Remove
 
 ```bash
 fork rm              # remove current worktree
 fork rm feature-x    # remove specific
-fork rm -f feature-x # force remove (if unmerged)
+fork rm -f feature-x # force remove (if unmerged or dirty)
 fork rm -a           # remove all
-fork clean           # remove all merged worktrees
+fork clean           # remove all merged and clean worktrees
 ```
+
+**Protection**: Worktrees are protected from deletion if they are:
+- Unmerged (have commits not in the base branch), OR
+- Dirty (have uncommitted changes, staged changes, or untracked files)
+
+Use `-f/--force` to bypass these protections.
 
 ## Directory Layout
 

@@ -500,6 +500,28 @@ assert_contains "feature-merged" "$ls_merged" "ls -m lists merged worktrees"
 assert_not_contains "feature-unmerged" "$ls_merged" "ls -m excludes unmerged worktrees"
 assert_contains "feature-unmerged" "$ls_unmerged" "ls -u lists unmerged worktrees"
 assert_not_contains "feature-merged" "$ls_unmerged" "ls -u excludes merged worktrees"
+
+ls_all=$(run_fork ls)
+assert_contains "merged" "$ls_all" "ls shows merge status"
+assert_contains "clean" "$ls_all" "ls shows dirty status"
+
+run_fork_quiet new feature-dirty
+(
+	cd "$WORKTREE_BASE_REAL/feature-dirty" &&
+		echo "dirty" >dirty.txt
+)
+ls_dirty=$(run_fork ls -d)
+ls_clean=$(run_fork ls -c)
+assert_contains "feature-dirty" "$ls_dirty" "ls -d lists dirty worktrees"
+assert_not_contains "feature-merged" "$ls_dirty" "ls -d excludes clean worktrees"
+assert_not_contains "feature-dirty" "$ls_clean" "ls -c excludes dirty worktrees"
+assert_contains "feature-merged" "$ls_clean" "ls -c lists clean worktrees"
+
+ls_dirty_line=$(run_fork ls | grep "feature-dirty" || true)
+assert_contains "dirty" "$ls_dirty_line" "ls indicates dirty status for dirty worktree"
+ls_clean_line=$(run_fork ls | grep "feature-merged" || true)
+assert_contains "clean" "$ls_clean_line" "ls indicates clean status for clean worktree"
+
 clean_first_stdout="$test_root/clean_first.out"
 clean_first_stderr="$test_root/clean_first.err"
 run_fork_capture "$clean_first_stdout" "$clean_first_stderr" clean
@@ -603,6 +625,96 @@ assert_equal "$REPO_REALPATH" "$rm_force_all_path" "rm -a -f prints repo path af
 assert_contains "Removed worktree:" "$rm_force_all_msg" "rm -a -f reports removals"
 assert_dir_missing "$WORKTREE_BASE_REAL/stubborn" "rm -a -f removes stubborn worktree"
 assert_dir_missing "$WORKTREE_BASE_REAL/aux" "rm -a -f removes auxiliary worktree"
+
+setup_repo "fork-dirty"
+run_fork_quiet new dirty-staged
+(
+	cd "$WORKTREE_BASE_REAL/dirty-staged" &&
+		echo "staged" >staged.txt &&
+		git add staged.txt
+)
+dirty_staged_rm_stdout="$test_root/dirty_staged_rm.out"
+dirty_staged_rm_stderr="$test_root/dirty_staged_rm.err"
+set +e
+run_fork_capture "$dirty_staged_rm_stdout" "$dirty_staged_rm_stderr" rm dirty-staged
+dirty_staged_rm_status=$?
+set -e
+dirty_staged_rm_err=$(cat "$dirty_staged_rm_stderr")
+assert_status 1 "$dirty_staged_rm_status" "rm refuses to delete worktree with staged changes"
+assert_contains "uncommitted changes" "$dirty_staged_rm_err" "rm staged emits dirty error"
+assert_dir_exists "$WORKTREE_BASE_REAL/dirty-staged" "rm without force leaves dirty worktree with staged changes"
+
+run_fork_quiet new dirty-unstaged
+(
+	cd "$WORKTREE_BASE_REAL/dirty-unstaged" &&
+		echo "modified" >README.md
+)
+dirty_unstaged_rm_stdout="$test_root/dirty_unstaged_rm.out"
+dirty_unstaged_rm_stderr="$test_root/dirty_unstaged_rm.err"
+set +e
+run_fork_capture "$dirty_unstaged_rm_stdout" "$dirty_unstaged_rm_stderr" rm dirty-unstaged
+dirty_unstaged_rm_status=$?
+set -e
+dirty_unstaged_rm_err=$(cat "$dirty_unstaged_rm_stderr")
+assert_status 1 "$dirty_unstaged_rm_status" "rm refuses to delete worktree with unstaged changes"
+assert_contains "uncommitted changes" "$dirty_unstaged_rm_err" "rm unstaged emits dirty error"
+assert_dir_exists "$WORKTREE_BASE_REAL/dirty-unstaged" "rm without force leaves dirty worktree with unstaged changes"
+
+run_fork_quiet new dirty-untracked
+(
+	cd "$WORKTREE_BASE_REAL/dirty-untracked" &&
+		echo "untracked" >untracked.txt
+)
+dirty_untracked_rm_stdout="$test_root/dirty_untracked_rm.out"
+dirty_untracked_rm_stderr="$test_root/dirty_untracked_rm.err"
+set +e
+run_fork_capture "$dirty_untracked_rm_stdout" "$dirty_untracked_rm_stderr" rm dirty-untracked
+dirty_untracked_rm_status=$?
+set -e
+dirty_untracked_rm_err=$(cat "$dirty_untracked_rm_stderr")
+assert_status 1 "$dirty_untracked_rm_status" "rm refuses to delete worktree with untracked files"
+assert_contains "uncommitted changes" "$dirty_untracked_rm_err" "rm untracked emits dirty error"
+assert_dir_exists "$WORKTREE_BASE_REAL/dirty-untracked" "rm without force leaves dirty worktree with untracked files"
+
+dirty_force_rm_stdout="$test_root/dirty_force_rm.out"
+dirty_force_rm_stderr="$test_root/dirty_force_rm.err"
+run_fork_capture "$dirty_force_rm_stdout" "$dirty_force_rm_stderr" rm -f dirty-staged dirty-unstaged dirty-untracked
+dirty_force_rm_status=$?
+dirty_force_rm_path=$(cat "$dirty_force_rm_stdout")
+dirty_force_rm_msg=$(cat "$dirty_force_rm_stderr")
+assert_status 0 "$dirty_force_rm_status" "rm -f succeeds with dirty worktrees"
+assert_equal "$REPO_REALPATH" "$dirty_force_rm_path" "rm -f prints repo path after dirty cleanup"
+assert_contains "Removed worktree:" "$dirty_force_rm_msg" "rm -f reports removals of dirty worktrees"
+assert_dir_missing "$WORKTREE_BASE_REAL/dirty-staged" "rm -f removes dirty worktree with staged changes"
+assert_dir_missing "$WORKTREE_BASE_REAL/dirty-unstaged" "rm -f removes dirty worktree with unstaged changes"
+assert_dir_missing "$WORKTREE_BASE_REAL/dirty-untracked" "rm -f removes dirty worktree with untracked files"
+
+setup_repo "fork-clean-dirty"
+run_fork_quiet new clean-dirty-staged
+run_fork_quiet new clean-dirty-untracked
+run_fork_quiet new clean-normal
+(
+	cd "$WORKTREE_BASE_REAL/clean-dirty-staged" &&
+		echo "staged" >staged.txt &&
+		git add staged.txt
+)
+(
+	cd "$WORKTREE_BASE_REAL/clean-dirty-untracked" &&
+		echo "untracked" >untracked.txt
+)
+clean_skip_dirty_stdout="$test_root/clean_skip_dirty.out"
+clean_skip_dirty_stderr="$test_root/clean_skip_dirty.err"
+run_fork_capture "$clean_skip_dirty_stdout" "$clean_skip_dirty_stderr" clean
+clean_skip_dirty_out=$(cat "$clean_skip_dirty_stdout")
+clean_skip_dirty_err=$(cat "$clean_skip_dirty_stderr")
+assert_empty "$clean_skip_dirty_out" "clean emits no stdout when only removing non-dirty worktrees"
+assert_contains "Removed worktree: clean-normal" "$clean_skip_dirty_err" "clean removes clean merged worktrees"
+assert_not_contains "clean-dirty-staged" "$clean_skip_dirty_err" "clean skips dirty worktree with staged changes"
+assert_not_contains "clean-dirty-untracked" "$clean_skip_dirty_err" "clean skips dirty worktree with untracked files"
+assert_dir_exists "$WORKTREE_BASE_REAL/clean-dirty-staged" "clean preserves dirty worktree with staged changes"
+assert_dir_exists "$WORKTREE_BASE_REAL/clean-dirty-untracked" "clean preserves dirty worktree with untracked files"
+assert_dir_missing "$WORKTREE_BASE_REAL/clean-normal" "clean removes clean merged worktree"
+
 help_stdout="$test_root/help.out"
 help_stderr="$test_root/help.err"
 set +e
