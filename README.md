@@ -1,18 +1,20 @@
 # fork
 
-A shell wrapper around `git worktree` for managing branch-based worktrees in a
-standardized layout.
+Simple shell wrapper for `git worktree` that adds helpers like `fork go` and
+`fork main`, and integrates with your shell so branch hopping stays fast, clean,
+and scriptable.
 
 ## Features
 
 - **Consistent worktree layout**: worktrees in `../<repo>_forks/<branch>`
 - **Simple navigation**: `fork go <branch>` to switch or create, `fork main` to return
-- **Shell integration**: automatic directory changes
+- **Shell integration**: automatic directory changes and config loading
 
 ## Installation
 
 ```bash
 chmod +x fork.sh
+# Make available on PATH by symlinking or copying
 sudo ln -sf "$(pwd)/fork.sh" /usr/local/bin/fork
 ```
 
@@ -46,13 +48,15 @@ fork sh | source
 
 Reload: `source ~/.config/fish/config.fish`
 
-### How it works
+### Manual Installation
 
 The `fork sh` command auto-detects your shell from `$SHELL`. If you prefer to specify explicitly:
 
 - `fork sh bash` for Bash
 - `fork sh zsh` for Zsh
 - `fork sh fish` for Fish
+
+You can then copy the output of `fork sh` and paste it into your shell config file.
 
 If `FORK_ENV` is set when running `fork sh`, the configuration variables are embedded directly into the generated shell function, ensuring they're passed to every `fork` invocation.
 
@@ -119,7 +123,7 @@ fork clean           # remove all merged and clean worktrees
 
 Use `-f/--force` to bypass these protections.
 
-## Directory Layout
+## Default Directory Layout
 
 ```
 /path/to/
@@ -129,6 +133,9 @@ Use `-f/--force` to bypass these protections.
     ├── feature-y/
     └── bugfix-123/
 ```
+
+You can customize this pattern using the `FORK_DIR_PATTERN` environment variable
+(see Configuration).
 
 ## How it Works
 
@@ -180,8 +187,6 @@ FORK_DEBUG=1
 ```
 
 - Only variables prefixed with `FORK_` are loaded
-- Lines starting with `#` are treated as comments
-- Variables are exported to the environment when `fork` runs
 - When using shell integration (`fork sh`), these variables are automatically embedded in the generated function so they're passed to every `fork` invocation
 
 ### Environment Variables
