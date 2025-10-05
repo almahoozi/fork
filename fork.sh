@@ -34,8 +34,7 @@ load_env_file() {
   fi
 
   if [ ! -f "$env_file" ]; then
-    printf '%s\n' "Error: FORK_ENV file not found: $env_file" >&2
-    exit 1
+    return 0
   fi
 
   while IFS= read -r line || [ -n "$line" ]; do

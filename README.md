@@ -150,7 +150,7 @@ docker run --rm fork-tests --no-cache # full suite without cache
 docker run --rm fork-tests --verbose  # full verbose output
 ```
 
-By default only the final summary is shown; pass `--verbose` to stream every assertion. The script creates temporary repositories under `${TMPDIR:-/tmp}` and removes them on exit. Results are cached based on the contents of `fork.sh` and `test.sh`; pass `--no-cache` to bypass the cache for a single run, set `FORK_CACHE_PATH` to override the cache directory, or delete the cache file to force a rerun.
+By default only the final summary is shown; pass `--verbose` to stream every assertion. The script creates temporary repositories under `${TMPDIR:-/tmp}` and removes them on exit. Results are cached based on the contents of `fork.sh` and `test.sh`; pass `--no-cache` to bypass the cache for a single run, set `FORK_TEST_CACHE_PATH` to override the cache directory, or delete the cache file to force a rerun.
 
 ## Configuration
 

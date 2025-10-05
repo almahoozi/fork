@@ -108,8 +108,8 @@ if ! command -v git >/dev/null 2>&1; then
 fi
 
 if [ "$USE_CACHE" -eq 1 ] && [ "${FORK_TEST_CACHE_PHASE:-0}" -ne 1 ]; then
-  if [ -n "${FORK_CACHE_PATH:-}" ]; then
-    cache_dir="$FORK_CACHE_PATH"
+  if [ -n "${FORK_TEST_CACHE_PATH:-}" ]; then
+    cache_dir="$FORK_TEST_CACHE_PATH"
   elif [ -n "${XDG_CACHE_HOME:-}" ]; then
     cache_dir="$XDG_CACHE_HOME/fork"
   elif [ -n "${HOME:-}" ]; then
@@ -677,13 +677,11 @@ assert_contains "No worktrees found" "$env_load_out" "ls works with FORK_ENV set
 assert_contains "FORK_DIR_PATTERN=*_feature_*" "$env_load_err" "ls shows config when FORK_ENV is set"
 env_missing_stdout="$test_root/env_missing.out"
 env_missing_stderr="$test_root/env_missing.err"
-set +e
 (cd "$REPO_DIR" && env FORK_ENV="/nonexistent/file" sh "$FORK_SH" ls >"$env_missing_stdout" 2>"$env_missing_stderr")
 env_missing_status=$?
-set -e
-env_missing_err=$(cat "$env_missing_stderr")
-assert_status 1 "$env_missing_status" "fork exits non-zero for missing FORK_ENV file"
-assert_contains "FORK_ENV file not found" "$env_missing_err" "fork reports missing FORK_ENV file"
+env_missing_out=$(cat "$env_missing_stdout")
+assert_status 0 "$env_missing_status" "fork proceeds silently for missing FORK_ENV file"
+assert_contains "No worktrees found" "$env_missing_out" "fork works normally when FORK_ENV file is missing"
 sh_env_stdout="$test_root/sh_env.out"
 sh_env_stderr="$test_root/sh_env.err"
 (cd "$REPO_DIR" && env FORK_ENV="$env_file" sh "$FORK_SH" sh bash >"$sh_env_stdout" 2>"$sh_env_stderr")
