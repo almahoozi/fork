@@ -279,7 +279,7 @@ setup_repo() {
 	repo_name=$1
 	REPO_NAME="$repo_name"
 	REPO_DIR="$test_root/$repo_name"
-	WORKTREE_BASE="$test_root/${repo_name}_worktrees"
+	WORKTREE_BASE="$test_root/${repo_name}_forks"
 
 	mkdir -p "$REPO_DIR"
 	cd "$REPO_DIR"
@@ -291,7 +291,7 @@ setup_repo() {
 	git commit -m "Initial commit" >/dev/null 2>&1
 	git branch -M main >/dev/null 2>&1
 	REPO_REALPATH=$(pwd -P)
-	WORKTREE_BASE_REAL="$TEST_ROOT_REAL/${repo_name}_worktrees"
+	WORKTREE_BASE_REAL="$TEST_ROOT_REAL/${repo_name}_forks"
 	cd "$SCRIPT_DIR"
 }
 

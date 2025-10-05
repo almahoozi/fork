@@ -5,7 +5,7 @@ standardized layout.
 
 ## Features
 
-- **Consistent worktree layout**: worktrees in `../<repo>_worktrees/<branch>`
+- **Consistent worktree layout**: worktrees in `../<repo>_forks/<branch>`
 - **Simple navigation**: `fork go <branch>` to switch or create, `fork main` to return
 - **Shell integration**: automatic directory changes
 
@@ -107,7 +107,7 @@ fork clean           # remove all merged worktrees
 ```
 /path/to/
 ├── myproject/              # base repository
-└── myproject_worktrees/    # worktrees directory
+└── myproject_forks/        # forks directory
     ├── feature-x/
     ├── feature-y/
     └── bugfix-123/

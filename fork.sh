@@ -23,7 +23,7 @@
 #   help [-v|--verbose]
 #               Show help
 #
-# Convention: ../<repo>_worktrees/<branch>
+# Convention: ../<repo>_forks/<branch>
 
 set -eu
 
@@ -67,7 +67,7 @@ Commands:
   sh [bash|zsh|fish]                      Output shell integration function
   help [-v|--verbose]                     Show help
 
-Convention: ../<repo>_worktrees/<branch>
+Convention: ../<repo>_forks/<branch>
 
 Shell Integration (required for cd-ing):
   $shell_integration
@@ -124,8 +124,8 @@ Commands:
       Show this help.
 
 Convention:
-  Worktrees: ../<repo>_worktrees/<branch>
-  Example: myapp_worktrees/feature-x
+  Worktrees: ../<repo>_forks/<branch>
+  Example: myapp_forks/feature-x
 
 Shell Integration (required for cd-ing):
   Bash:  eval "$(fork sh bash)"   # Add to ~/.bashrc
@@ -181,7 +181,7 @@ get_repo_name() {
 get_worktree_base() {
 	repo_name="$(get_repo_name)"
 	repo_root="$(get_main_repo_root)"
-	printf '%s\n' "$(dirname "$repo_root")/${repo_name}_worktrees"
+	printf '%s\n' "$(dirname "$repo_root")/${repo_name}_forks"
 }
 
 get_worktree_path() {
