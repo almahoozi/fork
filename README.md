@@ -25,6 +25,9 @@ To support automatic directory changes, add the integration snippet to your shel
 Add to `~/.bashrc` or `~/.zshrc`:
 
 ```bash
+# Optional: set FORK_ENV before loading integration
+export FORK_ENV=~/.config/fork/config.env
+
 eval "$(fork sh)"
 ```
 
@@ -35,18 +38,23 @@ Reload: `source ~/.zshrc` or `source ~/.bashrc`
 Add to `~/.config/fish/config.fish`:
 
 ```fish
+# Optional: set FORK_ENV before loading integration
+set -gx FORK_ENV ~/.config/fork/config.env
+
 fork sh | source
 ```
 
 Reload: `source ~/.config/fish/config.fish`
 
-### Manual Installation
+### How it works
 
 The `fork sh` command auto-detects your shell from `$SHELL`. If you prefer to specify explicitly:
 
 - `fork sh bash` for Bash
 - `fork sh zsh` for Zsh
 - `fork sh fish` for Fish
+
+If `FORK_ENV` is set when running `fork sh`, the configuration variables are embedded directly into the generated shell function, ensuring they're passed to every `fork` invocation.
 
 ## Quick Start
 
@@ -172,14 +180,17 @@ FORK_DEBUG=1
 `fork` inspects the following environment variables:
 
 **`FORK_CD`**: Controls navigation message output
+
 - When `FORK_CD=1`, commands such as `fork go`, `fork co`, `fork main`, and `fork rm` emit only the target path on stdout so wrapper functions can `cd` into place without extra output.
 - When `FORK_CD` is unset or `0`, the same commands print human-friendly status messages on stderr in addition to the path.
 
 **`FORK_ENV`**: Path to configuration file
+
 - If set, loads `FORK_*` variables from the specified file on startup
 - Exits with error if the file doesn't exist
 
 **`FORK_DIR_PATTERN`**: Example configuration variable
+
 - Currently displays on startup if set (for demonstration purposes)
 - Future versions may use this to customize worktree directory patterns
 
