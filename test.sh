@@ -289,6 +289,7 @@ setup_repo() {
 	echo "initial" >README.md
 	git add README.md
 	git commit -m "Initial commit" >/dev/null 2>&1
+	git branch -M main >/dev/null 2>&1
 	REPO_REALPATH=$(pwd -P)
 	WORKTREE_BASE_REAL="$TEST_ROOT_REAL/${repo_name}_worktrees"
 	cd "$SCRIPT_DIR"
