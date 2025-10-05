@@ -144,12 +144,44 @@ docker run --rm fork-tests --verbose  # full verbose output
 
 By default only the final summary is shown; pass `--verbose` to stream every assertion. The script creates temporary repositories under `${TMPDIR:-/tmp}` and removes them on exit. Results are cached based on the contents of `fork.sh` and `test.sh`; pass `--no-cache` to bypass the cache for a single run, set `FORK_CACHE_PATH` to override the cache directory, or delete the cache file to force a rerun.
 
-## Environment
+## Configuration
 
-`fork` inspects the `FORK_CD` environment variable to decide whether to print navigation messages:
+### Environment File
 
+`fork` supports loading configuration from an environment file via the `FORK_ENV` variable:
+
+```bash
+export FORK_ENV=~/.config/fork/config.env
+```
+
+The env file should contain `FORK_*` prefixed variables (one per line):
+
+```bash
+# ~/.config/fork/config.env
+FORK_DIR_PATTERN=*_feature_*
+FORK_DEBUG=1
+```
+
+- Only variables prefixed with `FORK_` are loaded
+- Lines starting with `#` are treated as comments
+- Variables are exported to the environment when `fork` runs
+- When using shell integration (`fork sh`), these variables are automatically embedded in the generated function so they're passed to every `fork` invocation
+
+### Environment Variables
+
+`fork` inspects the following environment variables:
+
+**`FORK_CD`**: Controls navigation message output
 - When `FORK_CD=1`, commands such as `fork go`, `fork co`, `fork main`, and `fork rm` emit only the target path on stdout so wrapper functions can `cd` into place without extra output.
 - When `FORK_CD` is unset or `0`, the same commands print human-friendly status messages on stderr in addition to the path.
+
+**`FORK_ENV`**: Path to configuration file
+- If set, loads `FORK_*` variables from the specified file on startup
+- Exits with error if the file doesn't exist
+
+**`FORK_DIR_PATTERN`**: Example configuration variable
+- Currently displays on startup if set (for demonstration purposes)
+- Future versions may use this to customize worktree directory patterns
 
 ## Help
 

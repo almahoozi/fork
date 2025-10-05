@@ -106,6 +106,14 @@ Convention: ../<repo>_forks/<branch>
 Shell Integration (required for cd-ing):
   $shell_integration
 
+Configuration:
+  Set FORK_ENV to load configuration from a file:
+    export FORK_ENV=~/.config/fork/config.env
+  
+  Only FORK_* prefixed variables are loaded. Example config file:
+    FORK_DIR_PATTERN=*_feature_*
+    FORK_DEBUG=1
+
 Examples:
   fork new feature-x
   fork go feature-x
@@ -165,6 +173,24 @@ Shell Integration (required for cd-ing):
   Bash:  eval "$(fork sh bash)"   # Add to ~/.bashrc
   Zsh:   eval "$(fork sh zsh)"    # Add to ~/.zshrc
   Fish:  fork sh fish | source    # Add to ~/.config/fish/config.fish
+
+Configuration:
+  Set FORK_ENV to load configuration from a file on startup:
+    export FORK_ENV=~/.config/fork/config.env
+  
+  The env file should contain FORK_* prefixed variables (one per line).
+  Lines starting with # are treated as comments. Example:
+    # Fork configuration
+    FORK_DIR_PATTERN=*_feature_*
+    FORK_DEBUG=1
+  
+  When using shell integration (fork sh), env vars are automatically
+  embedded in the generated function and passed to every fork invocation.
+
+Environment Variables:
+  FORK_ENV          Path to configuration file (optional)
+  FORK_CD           Internal flag for shell integration (do not set manually)
+  FORK_DIR_PATTERN  Example config variable (displays on startup if set)
 
 Examples:
   fork new feature-x                   Create worktree for feature-x
