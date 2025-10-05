@@ -94,8 +94,6 @@ fork ls -d           # list dirty worktrees (uncommitted/untracked changes)
 fork ls -c           # list clean worktrees
 ```
 
-Output format: `<branch>  <merge_status>  <dirty_status>  <path>`
-
 ### Remove
 
 ```bash
@@ -107,6 +105,7 @@ fork clean           # remove all merged and clean worktrees
 ```
 
 **Protection**: Worktrees are protected from deletion if they are:
+
 - Unmerged (have commits not in the base branch), OR
 - Dirty (have uncommitted changes, staged changes, or untracked files)
 
