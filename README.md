@@ -204,7 +204,6 @@ FORK_DEBUG=1
 **`FORK_ENV`**: Path to configuration file
 
 - If set, loads `FORK_*` variables from the specified file on startup
-- Exits with error if the file doesn't exist
 
 **`FORK_DIR_PATTERN`**: Custom worktree directory pattern
 

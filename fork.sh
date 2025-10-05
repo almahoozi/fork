@@ -50,7 +50,9 @@ load_env_file() {
 
       case "$var_name" in
       FORK_*)
-        eval "export $var_name=\$var_value"
+        if printf '%s' "$var_name" | grep -Eq '^FORK_[A-Za-z0-9_]+$'; then
+          export "$var_name=$var_value"
+        fi
         ;;
       esac
       ;;
@@ -825,12 +827,14 @@ cmd_sh() {
           var_name="${line%%=*}"
           var_value="${line#*=}"
 
+          var_value_escaped=$(printf "%s" "$var_value" | sed "s/'/'\\\\''/g")
+
           case "$var_name" in
           FORK_*)
             if [ -z "$env_vars" ]; then
-              env_vars="$var_name='$var_value'"
+              env_vars="$var_name='$var_value_escaped'"
             else
-              env_vars="$env_vars $var_name='$var_value'"
+              env_vars="$env_vars $var_name='$var_value_escaped'"
             fi
             if [ -z "$env_list" ]; then
               env_list="$var_name"
