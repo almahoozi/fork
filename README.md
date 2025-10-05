@@ -58,7 +58,9 @@ The `fork sh` command auto-detects your shell from `$SHELL`. If you prefer to sp
 
 You can then copy the output of `fork sh` and paste it into your shell config file.
 
-If `FORK_ENV` is set when running `fork sh`, the configuration variables are embedded directly into the generated shell function, ensuring they're passed to every `fork` invocation.
+If `FORK_ENV` is set when running `fork sh`, the configuration variables are
+embedded directly into the generated shell function, ensuring they're passed to
+every `fork` invocation.
 
 ## Quick Start
 
@@ -187,7 +189,8 @@ FORK_DEBUG=1
 ```
 
 - Only variables prefixed with `FORK_` are loaded
-- When using shell integration (`fork sh`), these variables are automatically embedded in the generated function so they're passed to every `fork` invocation
+- When using shell integration (`fork sh`), these variables are automatically
+  embedded in the generated function so they're passed to every `fork` invocation
 
 ### Environment Variables
 
