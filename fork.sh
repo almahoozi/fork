@@ -27,6 +27,40 @@
 
 set -eu
 
+load_env_file() {
+	env_file="${FORK_ENV:-}"
+	if [ -z "$env_file" ]; then
+		return 0
+	fi
+
+	if [ ! -f "$env_file" ]; then
+		printf '%s\n' "Error: FORK_ENV file not found: $env_file" >&2
+		exit 1
+	fi
+
+	while IFS= read -r line || [ -n "$line" ]; do
+		line="${line%%#*}"
+		line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+
+		[ -z "$line" ] && continue
+
+		case "$line" in
+		*=*)
+			var_name="${line%%=*}"
+			var_value="${line#*=}"
+
+			case "$var_name" in
+			FORK_*)
+				eval "export $var_name=\$var_value"
+				;;
+			esac
+			;;
+		esac
+	done < "$env_file"
+}
+
+load_env_file
+
 usage() {
 	verbose=0
 	[ "${1-}" = "-v" ] || [ "${1-}" = "--verbose" ] && verbose=1
@@ -712,34 +746,69 @@ cmd_sh() {
 		esac
 	fi
 
+	env_vars=""
+	env_list=""
+	if [ -n "${FORK_ENV:-}" ]; then
+		if [ -f "$FORK_ENV" ]; then
+			while IFS= read -r line || [ -n "$line" ]; do
+				line="${line%%#*}"
+				line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+
+				[ -z "$line" ] && continue
+
+				case "$line" in
+				*=*)
+					var_name="${line%%=*}"
+					var_value="${line#*=}"
+
+					case "$var_name" in
+					FORK_*)
+						if [ -z "$env_vars" ]; then
+							env_vars="$var_name='$var_value'"
+						else
+							env_vars="$env_vars $var_name='$var_value'"
+						fi
+						if [ -z "$env_list" ]; then
+							env_list="$var_name"
+						else
+							env_list="$env_list $var_name"
+						fi
+						;;
+					esac
+					;;
+				esac
+			done < "$FORK_ENV"
+		fi
+	fi
+
 	case "$shell" in
 	bash | zsh)
-		cat <<'EOF'
+		cat <<EOF
 fork() {
-    case "$1" in
+    case "\$1" in
         co|go|main|rm|clean)
             local output
-            output=$(FORK_CD=1 command fork "$@")
-            if [ $? -eq 0 ] && [ -n "$output" ]; then
-                builtin cd "$output"
+            output=\$(FORK_CD=1 $env_vars command fork "\$@")
+            if [ \$? -eq 0 ] && [ -n "\$output" ]; then
+                builtin cd "\$output"
             fi
             ;;
         *)
-            command fork "$@"
+            $env_vars command fork "\$@"
             ;;
     esac
 }
 EOF
 		;;
 	fish)
-		cat <<'EOF'
+		cat <<EOF
 function fork
-    switch $argv[1]
+    switch \$argv[1]
         case co go main rm clean
-            set output (env FORK_CD=1 command fork $argv)
-            and builtin cd $output
+            set output (env FORK_CD=1 $env_vars command fork \$argv)
+            and builtin cd \$output
         case '*'
-            command fork $argv
+            env $env_vars command fork \$argv
     end
 end
 EOF
@@ -766,6 +835,10 @@ main() {
 		usage
 		;;
 	*)
+		if [ -n "${FORK_DIR_PATTERN:-}" ] && [ "${FORK_CD:-0}" != "1" ]; then
+			printf '%s\n' "Config: FORK_DIR_PATTERN=$FORK_DIR_PATTERN" >&2
+		fi
+
 		command_exists git || {
 			printf '%s\n' 'Error: git is required on PATH' >&2
 			exit 127
