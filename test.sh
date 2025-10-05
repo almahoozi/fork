@@ -707,7 +707,7 @@ clean_skip_dirty_stderr="$test_root/clean_skip_dirty.err"
 run_fork_capture "$clean_skip_dirty_stdout" "$clean_skip_dirty_stderr" clean
 clean_skip_dirty_out=$(cat "$clean_skip_dirty_stdout")
 clean_skip_dirty_err=$(cat "$clean_skip_dirty_stderr")
-assert_empty "$clean_skip_dirty_out" "clean emits no stdout when only removing non-dirty worktrees"
+assert_empty "$clean_skip_dirty_out" "clean emits no stdout when removing only non-dirty worktrees"
 assert_contains "Removed worktree: clean-normal" "$clean_skip_dirty_err" "clean removes clean merged worktrees"
 assert_not_contains "clean-dirty-staged" "$clean_skip_dirty_err" "clean skips dirty worktree with staged changes"
 assert_not_contains "clean-dirty-untracked" "$clean_skip_dirty_err" "clean skips dirty worktree with untracked files"
