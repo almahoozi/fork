@@ -1,18 +1,20 @@
 # fork
 
-A shell wrapper around `git worktree` for managing branch-based worktrees in a
-standardized layout.
+Simple shell wrapper for `git worktree` that adds helpers like `fork go` and
+`fork main`, and integrates with your shell so branch hopping stays fast, clean,
+and scriptable.
 
 ## Features
 
 - **Consistent worktree layout**: worktrees in `../<repo>_forks/<branch>`
 - **Simple navigation**: `fork go <branch>` to switch or create, `fork main` to return
-- **Shell integration**: automatic directory changes
+- **Shell integration**: automatic directory changes and config loading
 
 ## Installation
 
 ```bash
 chmod +x fork.sh
+# Make available on PATH by symlinking or copying
 sudo ln -sf "$(pwd)/fork.sh" /usr/local/bin/fork
 ```
 
@@ -25,6 +27,9 @@ To support automatic directory changes, add the integration snippet to your shel
 Add to `~/.bashrc` or `~/.zshrc`:
 
 ```bash
+# Optional: set FORK_ENV before loading integration
+export FORK_ENV=~/.config/fork/config.env
+
 eval "$(fork sh)"
 ```
 
@@ -35,6 +40,9 @@ Reload: `source ~/.zshrc` or `source ~/.bashrc`
 Add to `~/.config/fish/config.fish`:
 
 ```fish
+# Optional: set FORK_ENV before loading integration
+set -gx FORK_ENV ~/.config/fork/config.env
+
 fork sh | source
 ```
 
@@ -47,6 +55,12 @@ The `fork sh` command auto-detects your shell from `$SHELL`. If you prefer to sp
 - `fork sh bash` for Bash
 - `fork sh zsh` for Zsh
 - `fork sh fish` for Fish
+
+You can then copy the output of `fork sh` and paste it into your shell config file.
+
+If `FORK_ENV` is set when running `fork sh`, the configuration variables are
+embedded directly into the generated shell function, ensuring they're passed to
+every `fork` invocation.
 
 ## Quick Start
 
@@ -111,7 +125,7 @@ fork clean           # remove all merged and clean worktrees
 
 Use `-f/--force` to bypass these protections.
 
-## Directory Layout
+## Default Directory Layout
 
 ```
 /path/to/
@@ -121,6 +135,9 @@ Use `-f/--force` to bypass these protections.
     ├── feature-y/
     └── bugfix-123/
 ```
+
+You can customize this pattern using the `FORK_DIR_PATTERN` environment variable
+(see Configuration).
 
 ## How it Works
 
@@ -151,14 +168,47 @@ docker run --rm fork-tests --no-cache # full suite without cache
 docker run --rm fork-tests --verbose  # full verbose output
 ```
 
-By default only the final summary is shown; pass `--verbose` to stream every assertion. The script creates temporary repositories under `${TMPDIR:-/tmp}` and removes them on exit. Results are cached based on the contents of `fork.sh` and `test.sh`; pass `--no-cache` to bypass the cache for a single run, set `FORK_CACHE_PATH` to override the cache directory, or delete the cache file to force a rerun.
+By default only the final summary is shown; pass `--verbose` to stream every assertion. The script creates temporary repositories under `${TMPDIR:-/tmp}` and removes them on exit. Results are cached based on the contents of `fork.sh` and `test.sh`; pass `--no-cache` to bypass the cache for a single run, set `FORK_TEST_CACHE_PATH` to override the cache directory, or delete the cache file to force a rerun.
 
-## Environment
+## Configuration
 
-`fork` inspects the `FORK_CD` environment variable to decide whether to print navigation messages:
+### Environment File
+
+`fork` supports loading configuration from an environment file via the `FORK_ENV` variable:
+
+```bash
+export FORK_ENV=~/.config/fork/config.env
+```
+
+The env file should contain `FORK_*` prefixed variables (one per line):
+
+```bash
+# ~/.config/fork/config.env
+FORK_DIR_PATTERN=../{repo}_forks/{branch}
+FORK_DEBUG=1
+```
+
+- Only variables prefixed with `FORK_` are loaded
+- When using shell integration (`fork sh`), these variables are automatically
+  embedded in the generated function so they're passed to every `fork` invocation
+
+### Environment Variables
+
+`fork` inspects the following environment variables:
+
+**`FORK_CD`**: Controls navigation message output
 
 - When `FORK_CD=1`, commands such as `fork go`, `fork co`, `fork main`, and `fork rm` emit only the target path on stdout so wrapper functions can `cd` into place without extra output.
 - When `FORK_CD` is unset or `0`, the same commands print human-friendly status messages on stderr in addition to the path.
+
+**`FORK_ENV`**: Path to configuration file
+
+- If set, loads `FORK_*` variables from the specified file on startup
+
+**`FORK_DIR_PATTERN`**: Custom worktree directory pattern
+
+- Currently displays on startup if set (for demonstration purposes)
+- Future versions may use this to customize worktree directory patterns
 
 ## Help
 

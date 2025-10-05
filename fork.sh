@@ -1,5 +1,5 @@
 #!/bin/sh
-# fork.sh - Manage git worktrees in a standardized directory layout
+# fork.sh - Manage git worktrees like a forking boss
 #
 # Usage:
 #   fork [command] [args]
@@ -27,6 +27,41 @@
 
 set -eu
 
+load_env_file() {
+  env_file="${FORK_ENV:-}"
+  if [ -z "$env_file" ]; then
+    return 0
+  fi
+
+  if [ ! -f "$env_file" ]; then
+    return 0
+  fi
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%%#*}"
+    line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+
+    [ -z "$line" ] && continue
+
+    case "$line" in
+    *=*)
+      var_name="${line%%=*}"
+      var_value="${line#*=}"
+
+      case "$var_name" in
+      FORK_*)
+        if printf '%s' "$var_name" | grep -Eq '^FORK_[A-Za-z0-9_]+$'; then
+          export "$var_name=$var_value"
+        fi
+        ;;
+      esac
+      ;;
+    esac
+  done <"$env_file"
+}
+
+load_env_file
+
 usage() {
   verbose=0
   [ "${1-}" = "-v" ] || [ "${1-}" = "--verbose" ] && verbose=1
@@ -52,7 +87,7 @@ usage() {
     esac
 
     cat >&2 <<EOF
-fork - Manage git worktrees in a standardized directory layout
+fork - Manage git worktrees like a forking boss
 
 Usage: fork <command> [args]
 
@@ -77,6 +112,14 @@ Convention: ../<repo>_forks/<branch>
 Shell Integration:
   $shell_integration
 
+Configuration:
+  Set FORK_ENV to load configuration from a file:
+    export FORK_ENV=~/.config/fork/config.env
+  
+  Only FORK_* prefixed variables are loaded. Example config file:
+    FORK_DIR_PATTERN=../{repo}_forks/{branch}
+    FORK_DEBUG=1
+
 Examples:
   fork new feature-x
   fork go feature-x
@@ -91,7 +134,7 @@ EOF
   else
     # Verbose help always shows all shell options
     cat >&2 <<'EOF'
-fork - Manage git worktrees in a standardized directory layout
+fork - Manage git worktrees like a forking boss
 
 Usage: fork <command> [args]
 
@@ -142,6 +185,24 @@ Shell Integration (required for cd-ing):
   Bash:  eval "$(fork sh bash)"   # Add to ~/.bashrc
   Zsh:   eval "$(fork sh zsh)"    # Add to ~/.zshrc
   Fish:  fork sh fish | source    # Add to ~/.config/fish/config.fish
+
+Configuration:
+  Set FORK_ENV to load configuration from a file on shell configuration:
+    export FORK_ENV=~/.config/fork/config.env
+  
+  The env file should contain FORK_* prefixed variables (one per line).
+  Lines starting with # are treated as comments. Example:
+    # Fork configuration
+    FORK_DIR_PATTERN=../{repo}_forks/{branch}
+    FORK_DEBUG=1
+  
+  When using shell integration (fork sh), env vars are automatically
+  embedded in the generated function and passed to every fork invocation.
+
+Environment Variables:
+  FORK_ENV          Path to configuration file (optional)
+  FORK_CD           Internal flag for shell integration (do not set manually)
+  FORK_DIR_PATTERN  Example config variable (displays on startup if set)
 
 Examples:
   fork new feature-x                   Create worktree for feature-x
@@ -751,34 +812,71 @@ cmd_sh() {
     esac
   fi
 
+  env_vars=""
+  env_list=""
+  if [ -n "${FORK_ENV:-}" ]; then
+    if [ -f "$FORK_ENV" ]; then
+      while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%%#*}"
+        line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+
+        [ -z "$line" ] && continue
+
+        case "$line" in
+        *=*)
+          var_name="${line%%=*}"
+          var_value="${line#*=}"
+
+          var_value_escaped=$(printf "%s" "$var_value" | sed "s/'/'\\\\''/g")
+
+          case "$var_name" in
+          FORK_*)
+            if [ -z "$env_vars" ]; then
+              env_vars="$var_name='$var_value_escaped'"
+            else
+              env_vars="$env_vars $var_name='$var_value_escaped'"
+            fi
+            if [ -z "$env_list" ]; then
+              env_list="$var_name"
+            else
+              env_list="$env_list $var_name"
+            fi
+            ;;
+          esac
+          ;;
+        esac
+      done <"$FORK_ENV"
+    fi
+  fi
+
   case "$shell" in
   bash | zsh)
-    cat <<'EOF'
+    cat <<EOF
 fork() {
-    case "$1" in
+    case "\$1" in
         co|go|main|rm|clean)
             local output
-            output=$(FORK_CD=1 command fork "$@")
-            if [ $? -eq 0 ] && [ -n "$output" ]; then
-                builtin cd "$output"
+            output=\$(FORK_CD=1 $env_vars command fork "\$@")
+            if [ \$? -eq 0 ] && [ -n "\$output" ]; then
+                builtin cd "\$output"
             fi
             ;;
         *)
-            command fork "$@"
+            $env_vars command fork "\$@"
             ;;
     esac
 }
 EOF
     ;;
   fish)
-    cat <<'EOF'
+    cat <<EOF
 function fork
-    switch $argv[1]
+    switch \$argv[1]
         case co go main rm clean
-            set output (env FORK_CD=1 command fork $argv)
-            and builtin cd $output
+            set output (env FORK_CD=1 $env_vars command fork \$argv)
+            and builtin cd \$output
         case '*'
-            command fork $argv
+            env $env_vars command fork \$argv
     end
 end
 EOF
@@ -805,6 +903,10 @@ main() {
     usage
     ;;
   *)
+    if [ -n "${FORK_DIR_PATTERN:-}" ] && [ "${FORK_CD:-0}" != "1" ]; then
+      printf '%s\n' "Config: FORK_DIR_PATTERN=$FORK_DIR_PATTERN" >&2
+    fi
+
     command_exists git || {
       printf '%s\n' 'Error: git is required on PATH' >&2
       exit 127
