@@ -11,6 +11,64 @@
 
 set -eu
 
+FAST=0
+VERBOSE=0
+ORIG_ARGS="$*"
+
+usage() {
+  printf '%s\n' "Usage: $0 [--fast|-f] [--verbose|-v]"
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+  --fast|-f|fast)
+    FAST=1
+    ;;
+  --verbose|-v|verbose)
+    VERBOSE=1
+    ;;
+  --help|-h)
+    usage
+    exit 0
+    ;;
+  *)
+    printf '%s\n' "Error: unknown option '$1'" >&2
+    usage >&2
+    exit 2
+    ;;
+  esac
+  shift
+done
+
+if [ "${FORK_TEST_CACHE_FORCE_VERBOSE:-0}" -eq 1 ]; then
+  VERBOSE=1
+fi
+
+display_results() {
+  result_file=$1
+  result_status=$2
+  if [ "$VERBOSE" -eq 1 ]; then
+    cat "$result_file"
+  else
+    if [ "$result_status" -eq 0 ]; then
+      awk 'BEGIN{capture=0} /^---/{capture=1} capture{print}' "$result_file"
+    else
+      cat "$result_file"
+    fi
+  fi
+}
+
+hash_file() {
+  file_path=$1
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file_path" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file_path" | awk '{print $1}'
+  else
+    git hash-object "$file_path"
+  fi
+}
+
 project_root() {
   dirname "$0" | {
     IFS=/ read -r first rest || true
@@ -45,21 +103,107 @@ if ! command -v git >/dev/null 2>&1; then
   exit 1
 fi
 
+if [ "${FORK_TEST_CACHE_PHASE:-0}" -ne 1 ]; then
+  if [ -n "${FORK_CACHE_PATH:-}" ]; then
+    cache_dir="$FORK_CACHE_PATH"
+  elif [ -n "${XDG_CACHE_HOME:-}" ]; then
+    cache_dir="$XDG_CACHE_HOME/fork"
+  elif [ -n "${HOME:-}" ]; then
+    cache_dir="$HOME/.cache/fork"
+  else
+    cache_dir="$SCRIPT_DIR/.fork-cache"
+  fi
+
+  fork_hash=$(hash_file "$FORK_SH")
+  test_hash=$(hash_file "$SCRIPT_PATH")
+  cache_key="${fork_hash}_${test_hash}_fast${FAST}"
+  cache_file="$cache_dir/fork_test_cache_${cache_key}"
+  cache_status_file="$cache_file.status"
+
+  mkdir -p "$cache_dir"
+
+  if [ -f "$cache_file" ] && [ -f "$cache_status_file" ]; then
+    cached_status=$(cat "$cache_status_file")
+    if [ "$VERBOSE" -eq 1 ]; then
+      printf '%s\n' "Using cached test results (hash ${cache_key})"
+    else
+      printf '%s\n' "Using cached test results"
+    fi
+    display_results "$cache_file" "$cached_status"
+    exit "$cached_status"
+  fi
+
+  tmp_prefix="$cache_dir/fork_test_cache_tmp.$$"
+  tmp_cache="$tmp_prefix"
+  suffix=0
+  while :; do
+    if (umask 077 && : >"$tmp_cache") 2>/dev/null; then
+      break
+    fi
+    suffix=$((suffix + 1))
+    tmp_cache="${tmp_prefix}.$suffix"
+    if [ "$suffix" -ge 1000 ]; then
+      printf '%s\n' 'Error: unable to create temporary cache file' >&2
+      exit 1
+    fi
+  done
+
+  trap 'rm -f "$tmp_cache"' INT TERM HUP EXIT
+  set +e
+  if [ -n "$ORIG_ARGS" ]; then
+    FORK_TEST_CACHE_PHASE=1 FORK_TEST_CACHE_FORCE_VERBOSE=1 sh "$0" $ORIG_ARGS >"$tmp_cache" 2>&1
+  else
+    FORK_TEST_CACHE_PHASE=1 FORK_TEST_CACHE_FORCE_VERBOSE=1 sh "$0" >"$tmp_cache" 2>&1
+  fi
+  status=$?
+  set -e
+  display_results "$tmp_cache" "$status"
+  mv "$tmp_cache" "$cache_file"
+  printf '%s\n' "$status" >"$cache_status_file"
+  trap - INT TERM HUP EXIT
+  exit "$status"
+fi
+
 test_root="${TMPDIR:-/tmp}/fork-test-$$"
 mkdir -p "$test_root"
 TEST_ROOT_REAL=$(cd "$test_root" && pwd -P)
 trap 'rm -rf "$test_root"' EXIT HUP INT TERM
 
+FAIL_LOG="$test_root/failures.log"
+: >"$FAIL_LOG"
+
 PASS=0
 FAIL=0
 
+print_summary() {
+  printf '%s\n' "---"
+  printf '%s\n' "Passed: $PASS"
+  printf '%s\n' "Failed: $FAIL"
+  if [ "$FAIL" -ne 0 ] && [ -s "$FAIL_LOG" ]; then
+    printf '%s\n' "Failed tests:"
+    while IFS= read -r line; do
+      printf '  - %s\n' "$line"
+    done <"$FAIL_LOG"
+  fi
+}
+
 die() {
-  printf '%s\n' "not ok - $1: $2" >&2
+  desc=$1
+  reason=$2
+  printf '%s\n' "not ok - $desc: $reason" >&2
+  printf '%s\n' "$desc: $reason" >>"$FAIL_LOG"
   FAIL=$((FAIL + 1))
+  if [ "$FAST" -eq 1 ]; then
+    printf '%s\n' "Fast mode enabled; aborting after first failure." >&2
+    print_summary
+    exit 1
+  fi
 }
 
 ok() {
-  printf '%s\n' "ok - $1"
+  if [ "$VERBOSE" -eq 1 ]; then
+    printf '%s\n' "ok - $1"
+  fi
   PASS=$((PASS + 1))
 }
 
@@ -455,8 +599,6 @@ assert_status 1 "$sh_unknown_status" "fork sh rejects unknown shell"
 assert_empty "$sh_unknown_out" "fork sh unknown shell produces no stdout"
 assert_contains "unknown shell" "$sh_unknown_err" "fork sh unknown shell reports error"
 
-printf '%s\n' "---"
-printf '%s\n' "Passed: $PASS"
-printf '%s\n' "Failed: $FAIL"
+print_summary
 
 [ "$FAIL" -eq 0 ]

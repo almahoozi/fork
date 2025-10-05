@@ -130,10 +130,17 @@ fork clean           # remove all merged worktrees
 Run the shell-based harness from the repository root:
 
 ```bash
-sh test.sh
+sh test.sh           # run full suite
+sh test.sh --fast    # fail fast after the first error
+
+# Docker
+docker build -f .docker/Dockerfile -t fork-tests .
+docker run --rm fork-tests            # full suite
+docker run --rm fork-tests --fast     # fail fast mode
+docker run --rm fork-tests --verbose  # full verbose output
 ```
 
-The script will create temporary repositories under `${TMPDIR:-/tmp}` and remove them on exit.
+By default only the final summary is shown; pass `--verbose` to stream every assertion. The script creates temporary repositories under `${TMPDIR:-/tmp}` and removes them on exit. Results are cached based on the contents of `fork.sh` and `test.sh`; set `FORK_CACHE_PATH` to override the cache directory or delete the cache file to force a rerun.
 
 ## Environment
 
