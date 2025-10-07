@@ -18,7 +18,21 @@ jobs:
       - name: Set git default branch to main
         run: git config --global init.defaultBranch main
 
-      - name: Syntax check
+      - name: Syntax check modules
+        run: sh -n lib/*.sh
+
+      - name: Build fork.sh
+        run: sh build.sh
+
+      - name: Verify build is up to date
+        run: |
+          if ! git diff --exit-code fork.sh; then
+            echo "Error: fork.sh is not up to date with lib/ sources"
+            echo "Please run 'sh build.sh' and commit the changes"
+            exit 1
+          fi
+
+      - name: Syntax check script
         run: sh -n fork.sh
 
       - name: Run tests

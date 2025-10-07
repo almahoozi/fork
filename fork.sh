@@ -27,6 +27,12 @@
 
 set -eu
 
+# Load environment variables from FORK_ENV file
+# Reads and exports FORK_* prefixed variables from config file
+# Globals:
+#   FORK_ENV - Path to environment file (optional)
+# Returns:
+#   0 always (non-fatal if file missing or malformed)
 load_env_file() {
   env_file="${FORK_ENV:-}"
   if [ -z "$env_file" ]; then
@@ -62,6 +68,14 @@ load_env_file() {
 
 load_env_file
 
+# Display usage information and help text
+# Shows brief help by default, verbose help with -v or --verbose
+# Arguments:
+#   $1 - Optional: -v or --verbose for detailed help
+# Outputs:
+#   Help text to stderr
+# Exits:
+#   2 always (after displaying help)
 usage() {
   verbose=0
   [ "${1-}" = "-v" ] || [ "${1-}" = "--verbose" ] && verbose=1
@@ -227,10 +241,22 @@ EOF
   exit 2
 }
 
+# Check if a command exists in PATH
+# Arguments:
+#   $1 - Command name to check
+# Returns:
+#   0 if command exists, 1 otherwise
 command_exists() {
   command -v "$1" >/dev/null 2>&1
 }
 
+# Get the root directory of the current git repository
+# Outputs:
+#   Absolute path to repository root
+# Returns:
+#   0 on success
+# Exits:
+#   1 if not in a git repository
 get_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null || {
     printf '%s\n' 'Error: not in a git repository' >&2
@@ -238,6 +264,12 @@ get_repo_root() {
   }
 }
 
+# Get the root directory of the main repository
+# If in a worktree, returns the main repository root, not the worktree root
+# Outputs:
+#   Absolute path to main repository root
+# Returns:
+#   0 on success
 get_main_repo_root() {
   common_dir="$(git rev-parse --git-common-dir 2>/dev/null)"
   if [ -n "$common_dir" ] && [ "$common_dir" != ".git" ]; then
@@ -248,40 +280,86 @@ get_main_repo_root() {
   fi
 }
 
+# Get the name of the repository
+# Outputs:
+#   Repository name (basename of main repo root)
+# Returns:
+#   0 on success
 get_repo_name() {
   basename "$(get_main_repo_root)"
 }
 
+# Get the base directory where worktrees are stored
+# Follows convention: ../<repo>_forks/
+# Outputs:
+#   Absolute path to worktree base directory
+# Returns:
+#   0 on success
 get_worktree_base() {
   repo_name="$(get_repo_name)"
   repo_root="$(get_main_repo_root)"
   printf '%s\n' "$(dirname "$repo_root")/${repo_name}_forks"
 }
 
+# Get the full path to a specific worktree
+# Arguments:
+#   $1 - Branch name
+# Outputs:
+#   Absolute path to worktree for given branch
+# Returns:
+#   0 on success
 get_worktree_path() {
   branch="$1"
   printf '%s\n' "$(get_worktree_base)/$branch"
 }
 
+# Check if a local branch exists
+# Arguments:
+#   $1 - Branch name
+# Returns:
+#   0 if branch exists, 1 otherwise
 branch_exists() {
   git show-ref --verify --quiet "refs/heads/$1" 2>/dev/null
 }
 
+# Check if a remote branch exists on origin
+# Arguments:
+#   $1 - Branch name
+# Returns:
+#   0 if remote branch exists, 1 otherwise
 remote_branch_exists() {
   git show-ref --verify --quiet "refs/remotes/origin/$1" 2>/dev/null
 }
 
+# Check if a worktree exists for a given branch
+# Verifies both directory existence and git worktree registration
+# Arguments:
+#   $1 - Branch name
+# Returns:
+#   0 if worktree exists, 1 otherwise
 worktree_exists() {
   path="$(get_worktree_path "$1")"
   [ -d "$path" ] && git worktree list | grep "$(printf '%s' "$path" | sed 's/[]\/$*.^[]/\\&/g')" >/dev/null
 }
 
+# Check if a branch is merged into a base branch
+# Arguments:
+#   $1 - Branch name to check
+#   $2 - Base branch (default: main)
+# Returns:
+#   0 if branch is merged, 1 otherwise
 is_branch_merged() {
   branch="$1"
   base="${2:-main}"
   git branch --merged "$base" 2>/dev/null | awk '{print $NF}' | grep "^${branch}$" >/dev/null
 }
 
+# Get the branch name of the current worktree
+# Only works if current directory is within a worktree (not main repo)
+# Outputs:
+#   Branch name if in a worktree
+# Returns:
+#   0 if in a worktree, 1 if in main repo or not in worktree base
 get_current_worktree_branch() {
   current_dir="$(pwd)"
   worktree_base="$(get_worktree_base)"
@@ -298,6 +376,11 @@ get_current_worktree_branch() {
   esac
 }
 
+# Check if a worktree has uncommitted or untracked changes
+# Arguments:
+#   $1 - Path to worktree
+# Returns:
+#   0 if worktree is dirty (has changes), 1 if clean
 is_worktree_dirty() {
   path="$1"
   (cd "$path" && ! git diff --quiet 2>/dev/null) ||
@@ -305,6 +388,15 @@ is_worktree_dirty() {
     (cd "$path" && [ -n "$(git ls-files --others --exclude-standard 2>/dev/null)" ])
 }
 
+# Create a worktree for a single branch
+# Handles remote branch tracking, existing local branches, and new branch creation
+# Arguments:
+#   $1 - Branch name
+#   $2 - Base branch to create from (if branch doesn't exist)
+# Outputs:
+#   Success/error messages to stderr
+# Returns:
+#   0 on success, 1 if worktree already exists
 create_single_worktree() {
   branch="$1"
   base_branch="$2"
@@ -333,6 +425,52 @@ create_single_worktree() {
   printf '%s\n' "Created worktree: $path" >&2
 }
 
+# Remove a single worktree
+# Protects against removing unmerged or dirty worktrees unless forced
+# Arguments:
+#   $1 - Branch name
+#   $2 - Force flag (0=no, 1=yes)
+# Outputs:
+#   Status messages to stderr
+# Returns:
+#   0 on success, 1 if worktree doesn't exist or is protected
+remove_single_worktree() {
+  branch="$1"
+  force="$2"
+
+  path="$(get_worktree_path "$branch")"
+
+  if ! worktree_exists "$branch"; then
+    printf '%s\n' "Error: worktree for '$branch' does not exist" >&2
+    return 1
+  fi
+
+  if [ $force -eq 0 ]; then
+    if ! is_branch_merged "$branch"; then
+      printf '%s\n' "Error: branch '$branch' is not merged. Use -f to force removal." >&2
+      return 1
+    fi
+
+    if is_worktree_dirty "$path"; then
+      printf '%s\n' "Error: worktree '$branch' has uncommitted changes. Use -f to force removal." >&2
+      return 1
+    fi
+  fi
+
+  git worktree remove "$path" 2>/dev/null || git worktree remove --force "$path"
+  printf '%s\n' "Removed worktree: $branch" >&2
+  return 0
+}
+
+# Command: Create new worktree(s)
+# Creates one or more worktrees from a base branch (default: main)
+# Arguments:
+#   <branch>... - One or more branch names
+#   -t|--target <base> - Base branch to create from (optional)
+# Outputs:
+#   Status messages to stderr
+# Exits:
+#   1 on error (invalid arguments or creation failure)
 cmd_new() {
   base_branch="main"
   branches=""
@@ -369,6 +507,18 @@ cmd_new() {
   done
 }
 
+# Command: Change to worktree (checkout)
+# Prints path to existing worktree for shell integration to cd into
+# Arguments:
+#   $1 - Branch name
+# Outputs:
+#   Worktree path to stdout
+#   Status message to stderr (unless FORK_CD=1)
+# Globals:
+#   FORK_CD - Set to 1 when called from shell integration
+#   FORK_LAST - Exports previous directory when FORK_CD=1
+# Exits:
+#   1 if worktree doesn't exist or invalid arguments
 cmd_co() {
   if [ $# -ne 1 ]; then
     printf '%s\n' 'Usage: fork co <branch>' >&2
@@ -392,6 +542,15 @@ cmd_co() {
   fi
 }
 
+# Command: Go to main worktree
+# Prints path to main repository (not a worktree) for shell integration
+# Outputs:
+#   Main repository path to stdout
+#   Status message to stderr (unless FORK_CD=1)
+# Globals:
+#   FORK_CD - Set to 1 when called from shell integration
+# Returns:
+#   0 on success
 cmd_main() {
 
   repo_root="$(get_repo_root)"
@@ -420,6 +579,18 @@ cmd_main() {
   fi
 }
 
+# Command: Go to worktree (create if needed)
+# Combines checkout and creation - creates worktree if it doesn't exist
+# Arguments:
+#   $1 - Branch name
+#   -t|--target <base> - Base branch to create from if needed (optional)
+# Outputs:
+#   Worktree path to stdout
+#   Status messages to stderr
+# Globals:
+#   FORK_CD - Set to 1 when called from shell integration
+# Exits:
+#   1 on error (invalid arguments or creation failure)
 cmd_go() {
   base_branch="main"
 
@@ -469,34 +640,19 @@ cmd_go() {
   fi
 }
 
-remove_single_worktree() {
-  branch="$1"
-  force="$2"
-
-  path="$(get_worktree_path "$branch")"
-
-  if ! worktree_exists "$branch"; then
-    printf '%s\n' "Error: worktree for '$branch' does not exist" >&2
-    return 1
-  fi
-
-  if [ $force -eq 0 ]; then
-    if ! is_branch_merged "$branch"; then
-      printf '%s\n' "Error: branch '$branch' is not merged. Use -f to force removal." >&2
-      return 1
-    fi
-
-    if is_worktree_dirty "$path"; then
-      printf '%s\n' "Error: worktree '$branch' has uncommitted changes. Use -f to force removal." >&2
-      return 1
-    fi
-  fi
-
-  git worktree remove "$path" 2>/dev/null || git worktree remove --force "$path"
-  printf '%s\n' "Removed worktree: $branch" >&2
-  return 0
-}
-
+# Command: Remove worktree(s)
+# Removes one or more worktrees with safety checks for unmerged/dirty branches
+# Arguments:
+#   [branch...] - Branch names (optional, defaults to current worktree)
+#   -f|--force - Force removal of unmerged or dirty branches
+#   -a|--all - Remove all worktrees
+# Outputs:
+#   Main repository path to stdout (for shell integration to cd)
+#   Status messages to stderr
+# Globals:
+#   FORK_CD - Set to 1 when called from shell integration
+# Exits:
+#   1 if removal fails or not in worktree when no branch specified
 cmd_rm() {
   force=0
   all=0
@@ -586,6 +742,19 @@ cmd_rm() {
   [ $failed -eq 0 ] || exit 1
 }
 
+# Command: List worktrees
+# Lists worktrees with optional filtering by merge and dirty status
+# Arguments:
+#   -m|--merged - Show only merged worktrees
+#   -u|--unmerged - Show only unmerged worktrees
+#   -d|--dirty - Show only dirty worktrees (uncommitted changes)
+#   -c|--clean - Show only clean worktrees
+# Outputs:
+#   Tab-separated: <branch> <merge_status> <dirty_status> <path>
+# Returns:
+#   0 on success
+# Exits:
+#   1 on invalid option
 cmd_list() {
   filter_mode="all"
   filter_dirty=""
@@ -691,6 +860,18 @@ cmd_list() {
   fi
 }
 
+# Command: Clean merged worktrees
+# Removes all worktrees that are merged and have no uncommitted changes
+# Automatically skips worktrees with staged/unstaged changes or untracked files
+# Outputs:
+#   Main repository path to stdout if current worktree was removed
+#   Status messages to stderr
+# Globals:
+#   FORK_CD - Set to 1 when called from shell integration
+# Returns:
+#   0 on success
+# Exits:
+#   1 on invalid option
 cmd_clean() {
   if [ $# -gt 0 ]; then
     printf '%s\n' "Error: unknown option: $1" >&2
@@ -787,6 +968,17 @@ cmd_clean() {
   fi
 }
 
+# Command: Generate shell integration function
+# Outputs shell-specific wrapper function that enables cd-ing
+# Embeds FORK_* environment variables from FORK_ENV into generated function
+# Arguments:
+#   $1 - Shell type: bash, zsh, or fish (optional, auto-detected from $SHELL)
+# Outputs:
+#   Shell function definition to stdout
+# Returns:
+#   0 on success
+# Exits:
+#   1 if shell type unknown or $SHELL not set when no argument provided
 cmd_sh() {
   shell="${1:-}"
 
@@ -888,6 +1080,16 @@ EOF
   esac
 }
 
+# Main entry point and command dispatcher
+# Routes commands to appropriate handlers after common setup
+# Arguments:
+#   $1 - Command (help, sh, new, co, go, main, rm, ls, clean)
+#   $@ - Command-specific arguments
+# Globals:
+#   FORK_DIR_PATTERN - Optional config display
+#   FORK_CD - Internal shell integration flag
+# Exits:
+#   Various codes depending on command and error conditions
 main() {
   cmd="${1-}"
   [ $# -gt 0 ] && shift || true
@@ -946,3 +1148,4 @@ main() {
 }
 
 main "$@"
+

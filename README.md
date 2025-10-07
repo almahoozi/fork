@@ -13,6 +13,7 @@ and scriptable.
 ## Installation
 
 ```bash
+# Make fork.sh executable after downloading it
 chmod +x fork.sh
 # Make available on PATH by symlinking or copying
 sudo ln -sf "$(pwd)/fork.sh" /usr/local/bin/fork
