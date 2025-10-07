@@ -569,6 +569,7 @@ cmd_clean() {
 
 		if (cd "$main_root" && git worktree remove "$path" 2>/dev/null) || (cd "$main_root" && git worktree remove --force "$path"); then
 			printf '%s\n' "Removed worktree: $branch" >&2
+			remove_container "$branch" || true
 			removed=1
 		fi
 	done <"$queue_file"
@@ -581,6 +582,7 @@ cmd_clean() {
 		current_branch_name=${current_entry#*|}
 		if (cd "$main_root" && git worktree remove "$current_path" 2>/dev/null) || (cd "$main_root" && git worktree remove --force "$current_path"); then
 			printf '%s\n' "Removed worktree: $current_branch_name" >&2
+			remove_container "$current_branch_name" || true
 			removed=1
 			removed_current=1
 		fi

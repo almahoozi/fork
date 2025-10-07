@@ -1,8 +1,20 @@
-# Check if container runtime (Docker) is available
+# Get the container runtime to use
+# Globals:
+#   FORK_CONTAINER_RUNTIME - User-specified runtime (docker or podman)
+# Outputs:
+#   Runtime name to stdout
 # Returns:
-#   0 if Docker is available, 1 otherwise
+#   0 always
+get_container_runtime() {
+	printf '%s' "${FORK_CONTAINER_RUNTIME:-docker}"
+}
+
+# Check if container runtime is available
+# Returns:
+#   0 if runtime is available, 1 otherwise
 container_runtime_available() {
-	command -v docker >/dev/null 2>&1
+	runtime="$(get_container_runtime)"
+	command -v "$runtime" >/dev/null 2>&1
 }
 
 # Get the container image to use
@@ -41,7 +53,8 @@ get_container_name() {
 #   0 if container exists, 1 otherwise
 container_exists() {
 	container_name="$1"
-	docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"
+	runtime="$(get_container_runtime)"
+	"$runtime" ps -a --format '{{.Names}}' | grep -q "^${container_name}$"
 }
 
 # Check if container is running
@@ -51,7 +64,8 @@ container_exists() {
 #   0 if container is running, 1 otherwise
 container_is_running() {
 	container_name="$1"
-	docker ps --format '{{.Names}}' | grep -q "^${container_name}$"
+	runtime="$(get_container_runtime)"
+	"$runtime" ps --format '{{.Names}}' | grep -q "^${container_name}$"
 }
 
 # Create and start a container for a fork
@@ -67,9 +81,11 @@ create_container() {
 	worktree_path="$2"
 	container_name="$(get_container_name "$branch")"
 	image="$(get_container_image)"
+	runtime="$(get_container_runtime)"
+	repo_name="$(get_repo_name)"
 
 	if ! container_runtime_available; then
-		printf '%s\n' 'Error: Docker is not available. Please install Docker.' >&2
+		printf '%s\n' "Error: Container runtime is not available. Please install $runtime." >&2
 		return 1
 	fi
 
@@ -77,7 +93,7 @@ create_container() {
 		if container_is_running "$container_name"; then
 			return 0
 		else
-			docker start "$container_name" >/dev/null 2>&1 || {
+			"$runtime" start "$container_name" >/dev/null 2>&1 || {
 				printf '%s\n' "Error: failed to start existing container: $container_name" >&2
 				return 1
 			}
@@ -87,10 +103,10 @@ create_container() {
 
 	worktree_path_abs="$(cd "$worktree_path" && pwd)"
 
-	docker run -d \
+	"$runtime" run -d \
 		--name "$container_name" \
-		-v "$worktree_path_abs:/workspace:rw" \
-		-w /workspace \
+		-v "$worktree_path_abs:/$repo_name:rw" \
+		-w "/$repo_name" \
 		--entrypoint /bin/sh \
 		"$image" \
 		-c "while true; do sleep 3600; done" >/dev/null 2>&1 || {
@@ -115,6 +131,7 @@ create_container() {
 remove_container() {
 	branch="$1"
 	container_name="$(get_container_name "$branch")"
+	runtime="$(get_container_runtime)"
 
 	if ! container_runtime_available; then
 		return 0
@@ -124,7 +141,7 @@ remove_container() {
 		return 0
 	fi
 
-	docker rm -f "$container_name" >/dev/null 2>&1 || {
+	"$runtime" rm -f "$container_name" >/dev/null 2>&1 || {
 		printf '%s\n' "Warning: failed to remove container: $container_name" >&2
 		return 1
 	}
@@ -145,5 +162,6 @@ remove_container() {
 #   0 always
 get_container_exec_command() {
 	container_name="$1"
-	printf 'FORK_CONTAINER_EXEC=1 docker exec -it %s /bin/sh' "$container_name"
+	runtime="$(get_container_runtime)"
+	printf 'FORK_CONTAINER_EXEC=1 %s exec -it %s /bin/sh' "$runtime" "$container_name"
 }

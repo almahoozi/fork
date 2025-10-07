@@ -137,6 +137,7 @@ Configuration:
     FORK_CONTAINER=1
     FORK_CONTAINER_IMAGE=ubuntu:latest
     FORK_CONTAINER_NAME=myproject
+    FORK_CONTAINER_RUNTIME=podman
 
 Examples:
   fork new feature-x
@@ -223,26 +224,28 @@ Configuration:
     FORK_CONTAINER=1
     FORK_CONTAINER_IMAGE=ubuntu:latest
     FORK_CONTAINER_NAME=myproject
+    FORK_CONTAINER_RUNTIME=podman
   
   When using shell integration (fork sh), env vars are automatically
   embedded in the generated function and passed to every fork invocation.
 
 Environment Variables:
-  FORK_ENV              Path to configuration file (optional)
-  FORK_CD               Internal flag for shell integration (do not set manually)
-  FORK_DIR_PATTERN      Example config variable (displays on startup if set)
-  FORK_CONTAINER        Set to 1 to enable container mode by default
-  FORK_CONTAINER_IMAGE  Container image to use (default: ubuntu:latest)
-  FORK_CONTAINER_NAME   Container name prefix (default: none)
+  FORK_ENV                Path to configuration file (optional)
+  FORK_CD                 Internal flag for shell integration (do not set manually)
+  FORK_DIR_PATTERN        Example config variable (displays on startup if set)
+  FORK_CONTAINER          Set to 1 to enable container mode by default
+  FORK_CONTAINER_IMAGE    Container image to use (default: ubuntu:latest)
+  FORK_CONTAINER_NAME     Container name prefix (default: none)
+  FORK_CONTAINER_RUNTIME  Container runtime to use (default: docker, also supports: podman)
 
 Container Mode:
-  Container mode creates isolated Docker containers for each fork, mounting
-  only the worktree directory. This provides isolation from the host system.
+  Container mode creates isolated containers for each fork, mounting only
+  the worktree directory. This provides isolation from the host system.
   
-  Requirements: Docker must be installed and running.
+  Requirements: Docker or Podman must be installed and running.
   
   Container naming: {FORK_CONTAINER_NAME}_{branch}_fork or {branch}_fork
-  Mount point: /workspace (read-write access to worktree only)
+  Mount point: /{repo_name} (read-write access to worktree only)
 
 Examples:
   fork new feature-x                   Create worktree for feature-x
@@ -342,11 +345,23 @@ get_worktree_path() {
   printf '%s\n' "$(get_worktree_base)/$branch"
 }
 
-# Check if container runtime (Docker) is available
+# Get the container runtime to use
+# Globals:
+#   FORK_CONTAINER_RUNTIME - User-specified runtime (docker or podman)
+# Outputs:
+#   Runtime name to stdout
 # Returns:
-#   0 if Docker is available, 1 otherwise
+#   0 always
+get_container_runtime() {
+	printf '%s' "${FORK_CONTAINER_RUNTIME:-docker}"
+}
+
+# Check if container runtime is available
+# Returns:
+#   0 if runtime is available, 1 otherwise
 container_runtime_available() {
-	command -v docker >/dev/null 2>&1
+	runtime="$(get_container_runtime)"
+	command -v "$runtime" >/dev/null 2>&1
 }
 
 # Get the container image to use
@@ -385,7 +400,8 @@ get_container_name() {
 #   0 if container exists, 1 otherwise
 container_exists() {
 	container_name="$1"
-	docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"
+	runtime="$(get_container_runtime)"
+	"$runtime" ps -a --format '{{.Names}}' | grep -q "^${container_name}$"
 }
 
 # Check if container is running
@@ -395,7 +411,8 @@ container_exists() {
 #   0 if container is running, 1 otherwise
 container_is_running() {
 	container_name="$1"
-	docker ps --format '{{.Names}}' | grep -q "^${container_name}$"
+	runtime="$(get_container_runtime)"
+	"$runtime" ps --format '{{.Names}}' | grep -q "^${container_name}$"
 }
 
 # Create and start a container for a fork
@@ -411,9 +428,11 @@ create_container() {
 	worktree_path="$2"
 	container_name="$(get_container_name "$branch")"
 	image="$(get_container_image)"
+	runtime="$(get_container_runtime)"
+	repo_name="$(get_repo_name)"
 
 	if ! container_runtime_available; then
-		printf '%s\n' 'Error: Docker is not available. Please install Docker.' >&2
+		printf '%s\n' "Error: Container runtime is not available. Please install $runtime." >&2
 		return 1
 	fi
 
@@ -421,7 +440,7 @@ create_container() {
 		if container_is_running "$container_name"; then
 			return 0
 		else
-			docker start "$container_name" >/dev/null 2>&1 || {
+			"$runtime" start "$container_name" >/dev/null 2>&1 || {
 				printf '%s\n' "Error: failed to start existing container: $container_name" >&2
 				return 1
 			}
@@ -431,10 +450,10 @@ create_container() {
 
 	worktree_path_abs="$(cd "$worktree_path" && pwd)"
 
-	docker run -d \
+	"$runtime" run -d \
 		--name "$container_name" \
-		-v "$worktree_path_abs:/workspace:rw" \
-		-w /workspace \
+		-v "$worktree_path_abs:/$repo_name:rw" \
+		-w "/$repo_name" \
 		--entrypoint /bin/sh \
 		"$image" \
 		-c "while true; do sleep 3600; done" >/dev/null 2>&1 || {
@@ -459,6 +478,7 @@ create_container() {
 remove_container() {
 	branch="$1"
 	container_name="$(get_container_name "$branch")"
+	runtime="$(get_container_runtime)"
 
 	if ! container_runtime_available; then
 		return 0
@@ -468,7 +488,7 @@ remove_container() {
 		return 0
 	fi
 
-	docker rm -f "$container_name" >/dev/null 2>&1 || {
+	"$runtime" rm -f "$container_name" >/dev/null 2>&1 || {
 		printf '%s\n' "Warning: failed to remove container: $container_name" >&2
 		return 1
 	}
@@ -489,7 +509,8 @@ remove_container() {
 #   0 always
 get_container_exec_command() {
 	container_name="$1"
-	printf 'FORK_CONTAINER_EXEC=1 docker exec -it %s /bin/sh' "$container_name"
+	runtime="$(get_container_runtime)"
+	printf 'FORK_CONTAINER_EXEC=1 %s exec -it %s /bin/sh' "$runtime" "$container_name"
 }
 
 # Check if a local branch exists
@@ -1212,6 +1233,7 @@ cmd_clean() {
 
 		if (cd "$main_root" && git worktree remove "$path" 2>/dev/null) || (cd "$main_root" && git worktree remove --force "$path"); then
 			printf '%s\n' "Removed worktree: $branch" >&2
+			remove_container "$branch" || true
 			removed=1
 		fi
 	done <"$queue_file"
@@ -1224,6 +1246,7 @@ cmd_clean() {
 		current_branch_name=${current_entry#*|}
 		if (cd "$main_root" && git worktree remove "$current_path" 2>/dev/null) || (cd "$main_root" && git worktree remove --force "$current_path"); then
 			printf '%s\n' "Removed worktree: $current_branch_name" >&2
+			remove_container "$current_branch_name" || true
 			removed=1
 			removed_current=1
 		fi

@@ -67,6 +67,7 @@ Configuration:
     FORK_CONTAINER=1
     FORK_CONTAINER_IMAGE=ubuntu:latest
     FORK_CONTAINER_NAME=myproject
+    FORK_CONTAINER_RUNTIME=podman
 
 Examples:
   fork new feature-x
@@ -153,26 +154,28 @@ Configuration:
     FORK_CONTAINER=1
     FORK_CONTAINER_IMAGE=ubuntu:latest
     FORK_CONTAINER_NAME=myproject
+    FORK_CONTAINER_RUNTIME=podman
   
   When using shell integration (fork sh), env vars are automatically
   embedded in the generated function and passed to every fork invocation.
 
 Environment Variables:
-  FORK_ENV              Path to configuration file (optional)
-  FORK_CD               Internal flag for shell integration (do not set manually)
-  FORK_DIR_PATTERN      Example config variable (displays on startup if set)
-  FORK_CONTAINER        Set to 1 to enable container mode by default
-  FORK_CONTAINER_IMAGE  Container image to use (default: ubuntu:latest)
-  FORK_CONTAINER_NAME   Container name prefix (default: none)
+  FORK_ENV                Path to configuration file (optional)
+  FORK_CD                 Internal flag for shell integration (do not set manually)
+  FORK_DIR_PATTERN        Example config variable (displays on startup if set)
+  FORK_CONTAINER          Set to 1 to enable container mode by default
+  FORK_CONTAINER_IMAGE    Container image to use (default: ubuntu:latest)
+  FORK_CONTAINER_NAME     Container name prefix (default: none)
+  FORK_CONTAINER_RUNTIME  Container runtime to use (default: docker, also supports: podman)
 
 Container Mode:
-  Container mode creates isolated Docker containers for each fork, mounting
-  only the worktree directory. This provides isolation from the host system.
+  Container mode creates isolated containers for each fork, mounting only
+  the worktree directory. This provides isolation from the host system.
   
-  Requirements: Docker must be installed and running.
+  Requirements: Docker or Podman must be installed and running.
   
   Container naming: {FORK_CONTAINER_NAME}_{branch}_fork or {branch}_fork
-  Mount point: /workspace (read-write access to worktree only)
+  Mount point: /{repo_name} (read-write access to worktree only)
 
 Examples:
   fork new feature-x                   Create worktree for feature-x
