@@ -21,20 +21,20 @@ load_env_file() {
 		[ -z "$line" ] && continue
 
 		case "$line" in
-			*=*)
-				var_name="${line%%=*}"
-				var_value="${line#*=}"
+		*=*)
+			var_name="${line%%=*}"
+			var_value="${line#*=}"
 
-				case "$var_name" in
-					FORK_*)
-						if printf '%s' "$var_name" | grep -Eq '^FORK_[A-Za-z0-9_]+$'; then
-							export "$var_name=$var_value"
-						fi
-						;;
-				esac
+			case "$var_name" in
+			FORK_*)
+				if printf '%s' "$var_name" | grep -Eq '^FORK_[A-Za-z0-9_]+$'; then
+					export "$var_name=$var_value"
+				fi
 				;;
+			esac
+			;;
 		esac
-	done < "$env_file"
+	done <"$env_file"
 }
 
 load_env_file

@@ -4,7 +4,7 @@
 # Returns:
 #   0 if command exists, 1 otherwise
 command_exists() {
-	command -v "$1" > /dev/null 2>&1
+	command -v "$1" >/dev/null 2>&1
 }
 
 # Get the root directory of the current git repository
@@ -15,7 +15,7 @@ command_exists() {
 # Exits:
 #   1 if not in a git repository
 get_repo_root() {
-	git rev-parse --show-toplevel 2> /dev/null || {
+	git rev-parse --show-toplevel 2>/dev/null || {
 		printf '%s\n' 'Error: not in a git repository' >&2
 		exit 1
 	}
@@ -28,7 +28,7 @@ get_repo_root() {
 # Returns:
 #   0 on success
 get_main_repo_root() {
-	common_dir="$(git rev-parse --git-common-dir 2> /dev/null)"
+	common_dir="$(git rev-parse --git-common-dir 2>/dev/null)"
 	if [ -n "$common_dir" ] && [ "$common_dir" != ".git" ]; then
 		# We're in a worktree, get the main repo root
 		cd "$(dirname "$common_dir")" && pwd

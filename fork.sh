@@ -50,20 +50,20 @@ load_env_file() {
 		[ -z "$line" ] && continue
 
 		case "$line" in
-			*=*)
-				var_name="${line%%=*}"
-				var_value="${line#*=}"
+		*=*)
+			var_name="${line%%=*}"
+			var_value="${line#*=}"
 
-				case "$var_name" in
-					FORK_*)
-						if printf '%s' "$var_name" | grep -Eq '^FORK_[A-Za-z0-9_]+$'; then
-							export "$var_name=$var_value"
-						fi
-						;;
-				esac
+			case "$var_name" in
+			FORK_*)
+				if printf '%s' "$var_name" | grep -Eq '^FORK_[A-Za-z0-9_]+$'; then
+					export "$var_name=$var_value"
+				fi
 				;;
+			esac
+			;;
 		esac
-	done < "$env_file"
+	done <"$env_file"
 }
 
 load_env_file
@@ -84,23 +84,23 @@ usage() {
 		# Detect shell from $SHELL
 		shell_integration=""
 		case "${SHELL-}" in
-			*/zsh)
-				shell_integration='eval "$(fork sh zsh)"   # Add to ~/.zshrc'
-				;;
-			*/bash)
-				shell_integration='eval "$(fork sh bash)"   # Add to ~/.bashrc'
-				;;
-			*/fish)
-				shell_integration='fork sh fish | source   # Add to ~/.config/fish/config.fish'
-				;;
-			*)
-				# Unknown or empty shell - show all options
-				shell_integration='Bash/Zsh: eval "$(fork sh bash)"   # Add to ~/.bashrc or ~/.zshrc
+		*/zsh)
+			shell_integration='eval "$(fork sh zsh)"   # Add to ~/.zshrc'
+			;;
+		*/bash)
+			shell_integration='eval "$(fork sh bash)"   # Add to ~/.bashrc'
+			;;
+		*/fish)
+			shell_integration='fork sh fish | source   # Add to ~/.config/fish/config.fish'
+			;;
+		*)
+			# Unknown or empty shell - show all options
+			shell_integration='Bash/Zsh: eval "$(fork sh bash)"   # Add to ~/.bashrc or ~/.zshrc
   Fish:     fork sh fish | source   # Add to ~/.config/fish/config.fish'
-				;;
+			;;
 		esac
 
-		cat >&2 << EOF
+		cat >&2 <<EOF
 fork - Manage git worktrees like a forking boss
 
 Usage: fork <command> [args]
@@ -158,7 +158,7 @@ Run 'fork help --verbose' for detailed documentation.
 EOF
 	else
 		# Verbose help always shows all shell options
-		cat >&2 << 'EOF'
+		cat >&2 <<'EOF'
 fork - Manage git worktrees like a forking boss
 
 Usage: fork <command> [args]
@@ -300,7 +300,7 @@ EOF
 # Returns:
 #   0 if command exists, 1 otherwise
 command_exists() {
-	command -v "$1" > /dev/null 2>&1
+	command -v "$1" >/dev/null 2>&1
 }
 
 # Get the root directory of the current git repository
@@ -311,7 +311,7 @@ command_exists() {
 # Exits:
 #   1 if not in a git repository
 get_repo_root() {
-	git rev-parse --show-toplevel 2> /dev/null || {
+	git rev-parse --show-toplevel 2>/dev/null || {
 		printf '%s\n' 'Error: not in a git repository' >&2
 		exit 1
 	}
@@ -324,7 +324,7 @@ get_repo_root() {
 # Returns:
 #   0 on success
 get_main_repo_root() {
-	common_dir="$(git rev-parse --git-common-dir 2> /dev/null)"
+	common_dir="$(git rev-parse --git-common-dir 2>/dev/null)"
 	if [ -n "$common_dir" ] && [ "$common_dir" != ".git" ]; then
 		# We're in a worktree, get the main repo root
 		cd "$(dirname "$common_dir")" && pwd
@@ -382,7 +382,7 @@ get_container_runtime() {
 #   0 if runtime is available, 1 otherwise
 container_runtime_available() {
 	runtime="$(get_container_runtime)"
-	command -v "$runtime" > /dev/null 2>&1
+	command -v "$runtime" >/dev/null 2>&1
 }
 
 # Get the container image to use
@@ -412,7 +412,7 @@ build_container_image() {
 
 	dockerfile_dir="$(dirname "$dockerfile")"
 
-	"$runtime" build -t "$image_tag" -f "$dockerfile" "$dockerfile_dir" > /dev/null 2>&1 || {
+	"$runtime" build -t "$image_tag" -f "$dockerfile" "$dockerfile_dir" >/dev/null 2>&1 || {
 		printf '%s\n' "Error: failed to build image from Dockerfile: $dockerfile" >&2
 		return 1
 	}
@@ -502,7 +502,7 @@ create_container() {
 			if container_is_running "$container_name"; then
 				return 0
 			else
-				"$runtime" start "$container_name" > /dev/null 2>&1 || {
+				"$runtime" start "$container_name" >/dev/null 2>&1 || {
 					printf '%s\n' "Error: failed to start existing container: $container_name" >&2
 					return 1
 				}
@@ -518,7 +518,7 @@ create_container() {
 			-w "/$repo_name" \
 			--entrypoint /bin/sh \
 			"$image" \
-			-c "while true; do sleep 3600; done" > /dev/null 2>&1 || {
+			-c "while true; do sleep 3600; done" >/dev/null 2>&1 || {
 			printf '%s\n' "Error: failed to create container: $container_name" >&2
 			return 1
 		}
@@ -551,7 +551,7 @@ remove_container() {
 		return 0
 	fi
 
-	"$runtime" rm -f "$container_name" > /dev/null 2>&1 || {
+	"$runtime" rm -f "$container_name" >/dev/null 2>&1 || {
 		printf '%s\n' "Warning: failed to remove container: $container_name" >&2
 		return 1
 	}
@@ -604,7 +604,7 @@ get_container_exec_command() {
 # Returns:
 #   0 if branch exists, 1 otherwise
 branch_exists() {
-	git show-ref --verify --quiet "refs/heads/$1" 2> /dev/null
+	git show-ref --verify --quiet "refs/heads/$1" 2>/dev/null
 }
 
 # Check if a remote branch exists on origin
@@ -613,7 +613,7 @@ branch_exists() {
 # Returns:
 #   0 if remote branch exists, 1 otherwise
 remote_branch_exists() {
-	git show-ref --verify --quiet "refs/remotes/origin/$1" 2> /dev/null
+	git show-ref --verify --quiet "refs/remotes/origin/$1" 2>/dev/null
 }
 
 # Check if a worktree exists for a given branch
@@ -624,7 +624,7 @@ remote_branch_exists() {
 #   0 if worktree exists, 1 otherwise
 worktree_exists() {
 	path="$(get_worktree_path "$1")"
-	[ -d "$path" ] && git worktree list | grep "$(printf '%s' "$path" | sed 's/[]\/$*.^[]/\\&/g')" > /dev/null
+	[ -d "$path" ] && git worktree list | grep "$(printf '%s' "$path" | sed 's/[]\/$*.^[]/\\&/g')" >/dev/null
 }
 
 # Check if a branch is merged into a base branch
@@ -636,7 +636,7 @@ worktree_exists() {
 is_branch_merged() {
 	branch="$1"
 	base="${2:-main}"
-	git branch --merged "$base" 2> /dev/null | awk '{print $NF}' | grep "^${branch}$" > /dev/null
+	git branch --merged "$base" 2>/dev/null | awk '{print $NF}' | grep "^${branch}$" >/dev/null
 }
 
 # Get the branch name of the current worktree
@@ -649,15 +649,15 @@ get_current_worktree_branch() {
 	current_dir="$(pwd)"
 	worktree_base="$(get_worktree_base)"
 	case "$current_dir" in
-		"$worktree_base"/*)
-			branch="${current_dir#"$worktree_base"/}"
-			branch="${branch%%/*}"
-			printf '%s\n' "$branch"
-			return 0
-			;;
-		*)
-			return 1
-			;;
+	"$worktree_base"/*)
+		branch="${current_dir#"$worktree_base"/}"
+		branch="${branch%%/*}"
+		printf '%s\n' "$branch"
+		return 0
+		;;
+	*)
+		return 1
+		;;
 	esac
 }
 
@@ -668,9 +668,9 @@ get_current_worktree_branch() {
 #   0 if worktree is dirty (has changes), 1 if clean
 is_worktree_dirty() {
 	path="$1"
-	(cd "$path" && ! git diff --quiet 2> /dev/null) \
-		|| (cd "$path" && ! git diff --cached --quiet 2> /dev/null) \
-		|| (cd "$path" && [ -n "$(git ls-files --others --exclude-standard 2> /dev/null)" ])
+	(cd "$path" && ! git diff --quiet 2>/dev/null) ||
+		(cd "$path" && ! git diff --cached --quiet 2>/dev/null) ||
+		(cd "$path" && [ -n "$(git ls-files --others --exclude-standard 2>/dev/null)" ])
 }
 
 # Create a worktree for a single branch
@@ -742,7 +742,7 @@ remove_single_worktree() {
 		fi
 	fi
 
-	git worktree remove "$path" 2> /dev/null || git worktree remove --force "$path"
+	git worktree remove "$path" 2>/dev/null || git worktree remove --force "$path"
 	printf '%s\n' "Removed worktree: $branch" >&2
 	return 0
 }
@@ -762,23 +762,23 @@ cmd_new() {
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
-			-t | --target)
-				shift
-				[ $# -gt 0 ] || {
-					printf '%s\n' 'Error: -t|--target requires a branch argument' >&2
-					exit 1
-				}
-				base_branch="$1"
-				shift
-				;;
-			-*)
-				printf '%s\n' "Error: unknown option: $1" >&2
+		-t | --target)
+			shift
+			[ $# -gt 0 ] || {
+				printf '%s\n' 'Error: -t|--target requires a branch argument' >&2
 				exit 1
-				;;
-			*)
-				branches="$branches $1"
-				shift
-				;;
+			}
+			base_branch="$1"
+			shift
+			;;
+		-*)
+			printf '%s\n' "Error: unknown option: $1" >&2
+			exit 1
+			;;
+		*)
+			branches="$branches $1"
+			shift
+			;;
 		esac
 	done
 
@@ -815,22 +815,22 @@ cmd_co() {
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
-			-c | --container)
-				use_container=1
-				shift
-				;;
-			-k | --keep-alive)
-				keep_alive_override=1
-				shift
-				;;
-			-*)
-				printf '%s\n' "Error: unknown option: $1" >&2
-				exit 1
-				;;
-			*)
-				branch="$1"
-				shift
-				;;
+		-c | --container)
+			use_container=1
+			shift
+			;;
+		-k | --keep-alive)
+			keep_alive_override=1
+			shift
+			;;
+		-*)
+			printf '%s\n' "Error: unknown option: $1" >&2
+			exit 1
+			;;
+		*)
+			branch="$1"
+			shift
+			;;
 		esac
 	done
 
@@ -864,7 +864,7 @@ cmd_co() {
 				if [ "${FORK_CD:-0}" != "1" ]; then
 					printf '%s\n' "Starting container for '$branch'..." >&2
 				fi
-				"$runtime" start "$container_name" > /dev/null 2>&1 || {
+				"$runtime" start "$container_name" >/dev/null 2>&1 || {
 					printf '%s\n' "Error: failed to start container: $container_name" >&2
 					exit 1
 				}
@@ -949,31 +949,31 @@ cmd_go() {
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
-			-t | --target)
-				shift
-				[ $# -gt 0 ] || {
-					printf '%s\n' 'Error: -t|--target requires a branch argument' >&2
-					exit 1
-				}
-				base_branch="$1"
-				shift
-				;;
-			-c | --container)
-				use_container=1
-				shift
-				;;
-			-k | --keep-alive)
-				keep_alive_override=1
-				shift
-				;;
-			-*)
-				printf '%s\n' "Error: unknown option: $1" >&2
+		-t | --target)
+			shift
+			[ $# -gt 0 ] || {
+				printf '%s\n' 'Error: -t|--target requires a branch argument' >&2
 				exit 1
-				;;
-			*)
-				branch="$1"
-				shift
-				;;
+			}
+			base_branch="$1"
+			shift
+			;;
+		-c | --container)
+			use_container=1
+			shift
+			;;
+		-k | --keep-alive)
+			keep_alive_override=1
+			shift
+			;;
+		-*)
+			printf '%s\n' "Error: unknown option: $1" >&2
+			exit 1
+			;;
+		*)
+			branch="$1"
+			shift
+			;;
 		esac
 	done
 
@@ -1008,7 +1008,7 @@ cmd_go() {
 				if [ "${FORK_CD:-0}" != "1" ]; then
 					printf '%s\n' "Starting container for '$branch'..." >&2
 				fi
-				"$runtime" start "$container_name" > /dev/null 2>&1 || {
+				"$runtime" start "$container_name" >/dev/null 2>&1 || {
 					printf '%s\n' "Error: failed to start container: $container_name" >&2
 					exit 1
 				}
@@ -1061,26 +1061,26 @@ cmd_rm() {
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
-			-f | --force)
-				force=1
-				shift
-				;;
-			-a | --all)
-				all=1
-				shift
-				;;
-			-c | --container)
-				remove_containers=1
-				shift
-				;;
-			-*)
-				printf '%s\n' "Error: unknown option: $1" >&2
-				exit 1
-				;;
-			*)
-				branches="$branches $1"
-				shift
-				;;
+		-f | --force)
+			force=1
+			shift
+			;;
+		-a | --all)
+			all=1
+			shift
+			;;
+		-c | --container)
+			remove_containers=1
+			shift
+			;;
+		-*)
+			printf '%s\n' "Error: unknown option: $1" >&2
+			exit 1
+			;;
+		*)
+			branches="$branches $1"
+			shift
+			;;
 		esac
 	done
 
@@ -1109,16 +1109,16 @@ cmd_rm() {
 					print path "|" branch
 				}
 			}
-		' > "$tmpfile"
+		' >"$tmpfile"
 
 		while IFS='|' read -r path branch; do
 			[ -n "$path" ] && [ -n "$branch" ] || continue
 			case "$path" in
-				"$worktree_base"/*)
-					branches="$branches $branch"
-					;;
+			"$worktree_base"/*)
+				branches="$branches $branch"
+				;;
 			esac
-		done < "$tmpfile"
+		done <"$tmpfile"
 		rm -f "$tmpfile"
 	elif [ -z "$branches" ]; then
 		# No branch specified, use current
@@ -1170,26 +1170,26 @@ cmd_list() {
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
-			-m | --merged)
-				filter_mode="merged"
-				shift
-				;;
-			-u | --unmerged)
-				filter_mode="unmerged"
-				shift
-				;;
-			-d | --dirty)
-				filter_dirty="dirty"
-				shift
-				;;
-			-c | --clean)
-				filter_dirty="clean"
-				shift
-				;;
-			*)
-				printf '%s\n' "Error: unknown option: $1" >&2
-				exit 1
-				;;
+		-m | --merged)
+			filter_mode="merged"
+			shift
+			;;
+		-u | --unmerged)
+			filter_mode="unmerged"
+			shift
+			;;
+		-d | --dirty)
+			filter_dirty="dirty"
+			shift
+			;;
+		-c | --clean)
+			filter_dirty="clean"
+			shift
+			;;
+		*)
+			printf '%s\n' "Error: unknown option: $1" >&2
+			exit 1
+			;;
 		esac
 	done
 
@@ -1201,7 +1201,7 @@ cmd_list() {
 	fi
 
 	tmpfile="${worktree_base}/.fork_list.$$"
-	: > "$tmpfile"
+	: >"$tmpfile"
 
 	git worktree list --porcelain | awk '
 		/^worktree / { path = substr($0, 10) }
@@ -1221,42 +1221,42 @@ cmd_list() {
 		[ -n "$path" ] && [ -n "$branch" ] || continue
 
 		case "$path" in
-			"$worktree_base"/*)
-				merged=0
-				if is_branch_merged "$branch"; then
-					merged=1
-				fi
+		"$worktree_base"/*)
+			merged=0
+			if is_branch_merged "$branch"; then
+				merged=1
+			fi
 
-				dirty=0
-				if is_worktree_dirty "$path"; then
-					dirty=1
-				fi
+			dirty=0
+			if is_worktree_dirty "$path"; then
+				dirty=1
+			fi
 
-				show=0
-				if [ "$filter_mode" = "all" ]; then
-					show=1
-				elif [ "$filter_mode" = "merged" ] && [ $merged -eq 1 ]; then
-					show=1
-				elif [ "$filter_mode" = "unmerged" ] && [ $merged -eq 0 ]; then
-					show=1
-				fi
+			show=0
+			if [ "$filter_mode" = "all" ]; then
+				show=1
+			elif [ "$filter_mode" = "merged" ] && [ $merged -eq 1 ]; then
+				show=1
+			elif [ "$filter_mode" = "unmerged" ] && [ $merged -eq 0 ]; then
+				show=1
+			fi
 
-				if [ $show -eq 1 ] && [ -n "$filter_dirty" ]; then
-					if [ "$filter_dirty" = "dirty" ] && [ $dirty -eq 0 ]; then
-						show=0
-					elif [ "$filter_dirty" = "clean" ] && [ $dirty -eq 1 ]; then
-						show=0
-					fi
+			if [ $show -eq 1 ] && [ -n "$filter_dirty" ]; then
+				if [ "$filter_dirty" = "dirty" ] && [ $dirty -eq 0 ]; then
+					show=0
+				elif [ "$filter_dirty" = "clean" ] && [ $dirty -eq 1 ]; then
+					show=0
 				fi
+			fi
 
-				if [ $show -eq 1 ]; then
-					merge_status="unmerged"
-					[ $merged -eq 1 ] && merge_status="merged"
-					dirty_status="clean"
-					[ $dirty -eq 1 ] && dirty_status="dirty"
-					printf '%s\t%s\t%s\t%s\n' "$branch" "$merge_status" "$dirty_status" "$path" >> "$tmpfile"
-				fi
-				;;
+			if [ $show -eq 1 ]; then
+				merge_status="unmerged"
+				[ $merged -eq 1 ] && merge_status="merged"
+				dirty_status="clean"
+				[ $dirty -eq 1 ] && dirty_status="dirty"
+				printf '%s\t%s\t%s\t%s\n' "$branch" "$merge_status" "$dirty_status" "$path" >>"$tmpfile"
+			fi
+			;;
 		esac
 	done
 
@@ -1320,26 +1320,26 @@ cmd_clean() {
 				print path "|" branch
 			}
 		}
-	' > "$tmpfile"
+	' >"$tmpfile"
 
 	queue_file="${worktree_base}/.fork_clean_queue.$$"
-	: > "$queue_file"
+	: >"$queue_file"
 
 	while IFS='|' read -r path branch; do
 		[ -n "$path" ] && [ -n "$branch" ] || continue
 
 		case "$path" in
-			"$worktree_base"/*)
-				if is_branch_merged "$branch" && ! is_worktree_dirty "$path"; then
-					if [ -n "$current_branch" ] && [ "$branch" = "$current_branch" ] && [ -n "$current_worktree_path" ] && [ "$path" = "$current_worktree_path" ]; then
-						current_entry="$path|$branch"
-					else
-						printf '%s|%s\n' "$path" "$branch" >> "$queue_file"
-					fi
+		"$worktree_base"/*)
+			if is_branch_merged "$branch" && ! is_worktree_dirty "$path"; then
+				if [ -n "$current_branch" ] && [ "$branch" = "$current_branch" ] && [ -n "$current_worktree_path" ] && [ "$path" = "$current_worktree_path" ]; then
+					current_entry="$path|$branch"
+				else
+					printf '%s|%s\n' "$path" "$branch" >>"$queue_file"
 				fi
-				;;
+			fi
+			;;
 		esac
-	done < "$tmpfile"
+	done <"$tmpfile"
 
 	rm -f "$tmpfile"
 
@@ -1348,12 +1348,12 @@ cmd_clean() {
 	while IFS='|' read -r path branch; do
 		[ -n "$path" ] && [ -n "$branch" ] || continue
 
-		if (cd "$main_root" && git worktree remove "$path" 2> /dev/null) || (cd "$main_root" && git worktree remove --force "$path"); then
+		if (cd "$main_root" && git worktree remove "$path" 2>/dev/null) || (cd "$main_root" && git worktree remove --force "$path"); then
 			printf '%s\n' "Removed worktree: $branch" >&2
 			remove_container "$branch" || true
 			removed=1
 		fi
-	done < "$queue_file"
+	done <"$queue_file"
 
 	rm -f "$queue_file"
 
@@ -1361,7 +1361,7 @@ cmd_clean() {
 	if [ -n "$current_entry" ]; then
 		current_path=${current_entry%%|*}
 		current_branch_name=${current_entry#*|}
-		if (cd "$main_root" && git worktree remove "$current_path" 2> /dev/null) || (cd "$main_root" && git worktree remove --force "$current_path"); then
+		if (cd "$main_root" && git worktree remove "$current_path" 2>/dev/null) || (cd "$main_root" && git worktree remove --force "$current_path"); then
 			printf '%s\n' "Removed worktree: $current_branch_name" >&2
 			remove_container "$current_branch_name" || true
 			removed=1
@@ -1399,19 +1399,19 @@ cmd_sh() {
 			exit 1
 		fi
 		case "$SHELL" in
-			*/bash)
-				shell="bash"
-				;;
-			*/zsh)
-				shell="zsh"
-				;;
-			*/fish)
-				shell="fish"
-				;;
-			*)
-				printf '%s\n' "Error: unknown shell in \$SHELL: $SHELL (supported: bash, zsh, fish)" >&2
-				exit 1
-				;;
+		*/bash)
+			shell="bash"
+			;;
+		*/zsh)
+			shell="zsh"
+			;;
+		*/fish)
+			shell="fish"
+			;;
+		*)
+			printf '%s\n' "Error: unknown shell in \$SHELL: $SHELL (supported: bash, zsh, fish)" >&2
+			exit 1
+			;;
 		esac
 	fi
 
@@ -1426,35 +1426,35 @@ cmd_sh() {
 				[ -z "$line" ] && continue
 
 				case "$line" in
-					*=*)
-						var_name="${line%%=*}"
-						var_value="${line#*=}"
+				*=*)
+					var_name="${line%%=*}"
+					var_value="${line#*=}"
 
-						var_value_escaped=$(printf "%s" "$var_value" | sed "s/'/'\\\\''/g")
+					var_value_escaped=$(printf "%s" "$var_value" | sed "s/'/'\\\\''/g")
 
-						case "$var_name" in
-							FORK_*)
-								if [ -z "$env_vars" ]; then
-									env_vars="$var_name='$var_value_escaped'"
-								else
-									env_vars="$env_vars $var_name='$var_value_escaped'"
-								fi
-								if [ -z "$env_list" ]; then
-									env_list="$var_name"
-								else
-									env_list="$env_list $var_name"
-								fi
-								;;
-						esac
+					case "$var_name" in
+					FORK_*)
+						if [ -z "$env_vars" ]; then
+							env_vars="$var_name='$var_value_escaped'"
+						else
+							env_vars="$env_vars $var_name='$var_value_escaped'"
+						fi
+						if [ -z "$env_list" ]; then
+							env_list="$var_name"
+						else
+							env_list="$env_list $var_name"
+						fi
 						;;
+					esac
+					;;
 				esac
-			done < "$FORK_ENV"
+			done <"$FORK_ENV"
 		fi
 	fi
 
 	case "$shell" in
-		bash | zsh)
-			cat << EOF
+	bash | zsh)
+		cat <<EOF
 fork() {
     case "\$1" in
         co|go|main|rm|clean)
@@ -1477,9 +1477,9 @@ fork() {
     esac
 }
 EOF
-			;;
-		fish)
-			cat << EOF
+		;;
+	fish)
+		cat <<EOF
 function fork
     switch \$argv[1]
         case co go main rm clean
@@ -1496,11 +1496,11 @@ function fork
     end
 end
 EOF
-			;;
-		*)
-			printf '%s\n' "Error: unknown shell: $shell (supported: bash, zsh, fish)" >&2
-			exit 1
-			;;
+		;;
+	*)
+		printf '%s\n' "Error: unknown shell: $shell (supported: bash, zsh, fish)" >&2
+		exit 1
+		;;
 	esac
 }
 
@@ -1519,55 +1519,55 @@ main() {
 	[ $# -gt 0 ] && shift || true
 
 	case "$cmd" in
-		help | -h | --help)
-			usage "$@"
+	help | -h | --help)
+		usage "$@"
+		;;
+	sh)
+		cmd_sh "$@"
+		;;
+	"")
+		usage
+		;;
+	*)
+		if [ -n "${FORK_DIR_PATTERN:-}" ] && [ "${FORK_CD:-0}" != "1" ]; then
+			printf '%s\n' "Config: FORK_DIR_PATTERN=$FORK_DIR_PATTERN" >&2
+		fi
+
+		command_exists git || {
+			printf '%s\n' 'Error: git is required on PATH' >&2
+			exit 127
+		}
+
+		get_repo_root >/dev/null
+
+		case "$cmd" in
+		new)
+			cmd_new "$@"
 			;;
-		sh)
-			cmd_sh "$@"
+		co | checkout)
+			cmd_co "$@"
 			;;
-		"")
-			usage
+		go)
+			cmd_go "$@"
+			;;
+		main)
+			cmd_main
+			;;
+		rm)
+			cmd_rm "$@"
+			;;
+		ls)
+			cmd_list "$@"
+			;;
+		clean)
+			cmd_clean "$@"
 			;;
 		*)
-			if [ -n "${FORK_DIR_PATTERN:-}" ] && [ "${FORK_CD:-0}" != "1" ]; then
-				printf '%s\n' "Config: FORK_DIR_PATTERN=$FORK_DIR_PATTERN" >&2
-			fi
-
-			command_exists git || {
-				printf '%s\n' 'Error: git is required on PATH' >&2
-				exit 127
-			}
-
-			get_repo_root > /dev/null
-
-			case "$cmd" in
-				new)
-					cmd_new "$@"
-					;;
-				co | checkout)
-					cmd_co "$@"
-					;;
-				go)
-					cmd_go "$@"
-					;;
-				main)
-					cmd_main
-					;;
-				rm)
-					cmd_rm "$@"
-					;;
-				ls)
-					cmd_list "$@"
-					;;
-				clean)
-					cmd_clean "$@"
-					;;
-				*)
-					printf '%s\n' "Error: unknown command: $cmd" >&2
-					usage
-					;;
-			esac
+			printf '%s\n' "Error: unknown command: $cmd" >&2
+			usage
 			;;
+		esac
+		;;
 	esac
 }
 

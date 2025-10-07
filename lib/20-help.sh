@@ -14,23 +14,23 @@ usage() {
 		# Detect shell from $SHELL
 		shell_integration=""
 		case "${SHELL-}" in
-			*/zsh)
-				shell_integration='eval "$(fork sh zsh)"   # Add to ~/.zshrc'
-				;;
-			*/bash)
-				shell_integration='eval "$(fork sh bash)"   # Add to ~/.bashrc'
-				;;
-			*/fish)
-				shell_integration='fork sh fish | source   # Add to ~/.config/fish/config.fish'
-				;;
-			*)
-				# Unknown or empty shell - show all options
-				shell_integration='Bash/Zsh: eval "$(fork sh bash)"   # Add to ~/.bashrc or ~/.zshrc
+		*/zsh)
+			shell_integration='eval "$(fork sh zsh)"   # Add to ~/.zshrc'
+			;;
+		*/bash)
+			shell_integration='eval "$(fork sh bash)"   # Add to ~/.bashrc'
+			;;
+		*/fish)
+			shell_integration='fork sh fish | source   # Add to ~/.config/fish/config.fish'
+			;;
+		*)
+			# Unknown or empty shell - show all options
+			shell_integration='Bash/Zsh: eval "$(fork sh bash)"   # Add to ~/.bashrc or ~/.zshrc
   Fish:     fork sh fish | source   # Add to ~/.config/fish/config.fish'
-				;;
+			;;
 		esac
 
-		cat >&2 << EOF
+		cat >&2 <<EOF
 fork - Manage git worktrees like a forking boss
 
 Usage: fork <command> [args]
@@ -88,7 +88,7 @@ Run 'fork help --verbose' for detailed documentation.
 EOF
 	else
 		# Verbose help always shows all shell options
-		cat >&2 << 'EOF'
+		cat >&2 <<'EOF'
 fork - Manage git worktrees like a forking boss
 
 Usage: fork <command> [args]

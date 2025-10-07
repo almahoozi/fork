@@ -24,7 +24,7 @@ sh build.sh
 printf '\n'
 
 printf '%s\n' "Step 4: Verify build is up to date..."
-if ! git diff --exit-code fork.sh > /dev/null 2>&1; then
+if ! git diff --exit-code fork.sh >/dev/null 2>&1; then
 	printf '%s\n' "✗ Error: fork.sh is not up to date with lib/ sources" >&2
 	printf '%s\n' "Please run 'sh build.sh' and commit the changes" >&2
 	exit 1

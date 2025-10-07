@@ -4,7 +4,7 @@
 # Returns:
 #   0 if branch exists, 1 otherwise
 branch_exists() {
-	git show-ref --verify --quiet "refs/heads/$1" 2> /dev/null
+	git show-ref --verify --quiet "refs/heads/$1" 2>/dev/null
 }
 
 # Check if a remote branch exists on origin
@@ -13,7 +13,7 @@ branch_exists() {
 # Returns:
 #   0 if remote branch exists, 1 otherwise
 remote_branch_exists() {
-	git show-ref --verify --quiet "refs/remotes/origin/$1" 2> /dev/null
+	git show-ref --verify --quiet "refs/remotes/origin/$1" 2>/dev/null
 }
 
 # Check if a worktree exists for a given branch
@@ -24,7 +24,7 @@ remote_branch_exists() {
 #   0 if worktree exists, 1 otherwise
 worktree_exists() {
 	path="$(get_worktree_path "$1")"
-	[ -d "$path" ] && git worktree list | grep "$(printf '%s' "$path" | sed 's/[]\/$*.^[]/\\&/g')" > /dev/null
+	[ -d "$path" ] && git worktree list | grep "$(printf '%s' "$path" | sed 's/[]\/$*.^[]/\\&/g')" >/dev/null
 }
 
 # Check if a branch is merged into a base branch
@@ -36,7 +36,7 @@ worktree_exists() {
 is_branch_merged() {
 	branch="$1"
 	base="${2:-main}"
-	git branch --merged "$base" 2> /dev/null | awk '{print $NF}' | grep "^${branch}$" > /dev/null
+	git branch --merged "$base" 2>/dev/null | awk '{print $NF}' | grep "^${branch}$" >/dev/null
 }
 
 # Get the branch name of the current worktree
@@ -49,15 +49,15 @@ get_current_worktree_branch() {
 	current_dir="$(pwd)"
 	worktree_base="$(get_worktree_base)"
 	case "$current_dir" in
-		"$worktree_base"/*)
-			branch="${current_dir#"$worktree_base"/}"
-			branch="${branch%%/*}"
-			printf '%s\n' "$branch"
-			return 0
-			;;
-		*)
-			return 1
-			;;
+	"$worktree_base"/*)
+		branch="${current_dir#"$worktree_base"/}"
+		branch="${branch%%/*}"
+		printf '%s\n' "$branch"
+		return 0
+		;;
+	*)
+		return 1
+		;;
 	esac
 }
 
@@ -68,9 +68,9 @@ get_current_worktree_branch() {
 #   0 if worktree is dirty (has changes), 1 if clean
 is_worktree_dirty() {
 	path="$1"
-	(cd "$path" && ! git diff --quiet 2> /dev/null) \
-		|| (cd "$path" && ! git diff --cached --quiet 2> /dev/null) \
-		|| (cd "$path" && [ -n "$(git ls-files --others --exclude-standard 2> /dev/null)" ])
+	(cd "$path" && ! git diff --quiet 2>/dev/null) ||
+		(cd "$path" && ! git diff --cached --quiet 2>/dev/null) ||
+		(cd "$path" && [ -n "$(git ls-files --others --exclude-standard 2>/dev/null)" ])
 }
 
 # Create a worktree for a single branch
@@ -142,7 +142,7 @@ remove_single_worktree() {
 		fi
 	fi
 
-	git worktree remove "$path" 2> /dev/null || git worktree remove --force "$path"
+	git worktree remove "$path" 2>/dev/null || git worktree remove --force "$path"
 	printf '%s\n' "Removed worktree: $branch" >&2
 	return 0
 }

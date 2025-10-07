@@ -14,7 +14,7 @@ get_container_runtime() {
 #   0 if runtime is available, 1 otherwise
 container_runtime_available() {
 	runtime="$(get_container_runtime)"
-	command -v "$runtime" > /dev/null 2>&1
+	command -v "$runtime" >/dev/null 2>&1
 }
 
 # Get the container image to use
@@ -44,7 +44,7 @@ build_container_image() {
 
 	dockerfile_dir="$(dirname "$dockerfile")"
 
-	"$runtime" build -t "$image_tag" -f "$dockerfile" "$dockerfile_dir" > /dev/null 2>&1 || {
+	"$runtime" build -t "$image_tag" -f "$dockerfile" "$dockerfile_dir" >/dev/null 2>&1 || {
 		printf '%s\n' "Error: failed to build image from Dockerfile: $dockerfile" >&2
 		return 1
 	}
@@ -134,7 +134,7 @@ create_container() {
 			if container_is_running "$container_name"; then
 				return 0
 			else
-				"$runtime" start "$container_name" > /dev/null 2>&1 || {
+				"$runtime" start "$container_name" >/dev/null 2>&1 || {
 					printf '%s\n' "Error: failed to start existing container: $container_name" >&2
 					return 1
 				}
@@ -150,7 +150,7 @@ create_container() {
 			-w "/$repo_name" \
 			--entrypoint /bin/sh \
 			"$image" \
-			-c "while true; do sleep 3600; done" > /dev/null 2>&1 || {
+			-c "while true; do sleep 3600; done" >/dev/null 2>&1 || {
 			printf '%s\n' "Error: failed to create container: $container_name" >&2
 			return 1
 		}
@@ -183,7 +183,7 @@ remove_container() {
 		return 0
 	fi
 
-	"$runtime" rm -f "$container_name" > /dev/null 2>&1 || {
+	"$runtime" rm -f "$container_name" >/dev/null 2>&1 || {
 		printf '%s\n' "Warning: failed to remove container: $container_name" >&2
 		return 1
 	}

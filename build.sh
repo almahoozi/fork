@@ -19,7 +19,7 @@ fi
 
 printf '%s\n' "Building $output from $lib_dir/*.sh"
 
-: > "$output"
+: >"$output"
 
 for module in "$lib_dir"/*.sh; do
 	if [ ! -f "$module" ]; then
@@ -27,8 +27,8 @@ for module in "$lib_dir"/*.sh; do
 	fi
 
 	printf '%s\n' "  + $(basename "$module")"
-	cat "$module" >> "$output"
-	printf '\n' >> "$output"
+	cat "$module" >>"$output"
+	printf '\n' >>"$output"
 done
 
 chmod +x "$output"

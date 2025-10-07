@@ -13,7 +13,7 @@ if [ "${1:-}" = "--check" ] || [ "${1:-}" = "-c" ]; then
 	CHECK_MODE=1
 fi
 
-if ! command -v shfmt > /dev/null 2>&1; then
+if ! command -v shfmt >/dev/null 2>&1; then
 	printf '%s\n' "Error: shfmt is not installed" >&2
 	printf '%s\n' "Install: brew install shfmt" >&2
 	exit 127
