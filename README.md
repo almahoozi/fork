@@ -9,6 +9,7 @@ and scriptable.
 - **Consistent worktree layout**: worktrees in `../<repo>_forks/<branch>`
 - **Simple navigation**: `fork go <branch>` to switch or create, `fork main` to return
 - **Shell integration**: automatic directory changes and config loading
+- **Container isolation**: optional containerized development per fork using Docker or Podman
 
 ## Installation
 
@@ -140,6 +141,62 @@ Use `-f/--force` to bypass these protections.
 You can customize this pattern using the `FORK_DIR_PATTERN` environment variable
 (see Configuration).
 
+## Container Mode
+
+`fork` supports creating isolated containers for each fork, providing a clean environment separate from your host system. This is useful for:
+
+- Testing code in a clean environment
+- Isolating dependencies per branch
+- Running potentially unsafe code
+- Consistent development environments across machines
+
+### Quick Start with Containers
+
+```bash
+# Work in a temporary container (auto-removed on exit)
+fork go feature-x -c
+
+# Keep container running for faster re-entry
+fork go feature-x -c -k
+
+# Use a custom image
+export FORK_CONTAINER_IMAGE=ubuntu:22.04
+fork go feature-x -c
+
+# Use a Dockerfile
+export FORK_CONTAINER_DOCKERFILE=./dev.Dockerfile
+fork go feature-x -c
+```
+
+### Container Configuration
+
+Set these in your `~/.config/fork/config.env` or shell environment:
+
+```bash
+FORK_CONTAINER=1                              # Enable container mode by default
+FORK_CONTAINER_IMAGE=ubuntu:latest            # Base image to use
+FORK_CONTAINER_DOCKERFILE=/path/to/Dockerfile # Build from Dockerfile (overrides IMAGE)
+FORK_CONTAINER_RUNTIME=docker                 # Runtime: docker or podman
+FORK_CONTAINER_NAME=myproject                 # Container name prefix
+FORK_CONTAINER_KEEP_ALIVE=1                   # Keep containers running in background
+```
+
+**Note**: If `FORK_CONTAINER_DOCKERFILE` is set, images are built with the tag `fork_{branch}_image` and used instead of pulling `FORK_CONTAINER_IMAGE`.
+
+### Container Behavior
+
+- **Ephemeral mode** (default): Container runs with `--rm` and is automatically removed when you exit
+- **Keep-alive mode** (`-k` flag or `FORK_CONTAINER_KEEP_ALIVE=1`): Container runs in background and persists between sessions
+- **Mount**: Only the worktree directory is mounted at `/{repo_name}` with read-write access
+- **Working directory**: Automatically set to the mounted worktree
+- **Removal**: Use `fork rm <branch> -c` to remove both worktree and container
+
+### Requirements
+
+- Docker or Podman installed and running
+- Sufficient permissions to run containers
+- Base image should have `git` and your preferred shell/tools installed
+
 ## How it Works
 
 - Wraps `git worktree`
@@ -210,6 +267,37 @@ FORK_DEBUG=1
 
 - Currently displays on startup if set (for demonstration purposes)
 - Future versions may use this to customize worktree directory patterns
+
+**Container-related variables:**
+
+**`FORK_CONTAINER`**: Enable container mode by default
+
+- Set to `1` to use containers without `-c` flag
+
+**`FORK_CONTAINER_IMAGE`**: Container image to use
+
+- Default: `ubuntu:latest`
+- Can be any Docker/Podman image
+
+**`FORK_CONTAINER_DOCKERFILE`**: Path to Dockerfile to build
+
+- If set, builds image from Dockerfile instead of using `FORK_CONTAINER_IMAGE`
+- Built images are tagged as `fork_{branch}_image`
+
+**`FORK_CONTAINER_RUNTIME`**: Container runtime
+
+- Default: `docker`
+- Also supports: `podman`
+
+**`FORK_CONTAINER_NAME`**: Container name prefix
+
+- Default: none (containers named `{branch}_fork`)
+- If set, containers named `{prefix}_{branch}_fork`
+
+**`FORK_CONTAINER_KEEP_ALIVE`**: Keep containers running
+
+- Default: `0` (containers auto-removed with `--rm`)
+- Set to `1` to keep containers running in background between sessions
 
 ## Help
 

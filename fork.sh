@@ -138,6 +138,7 @@ Configuration:
     FORK_DIR_PATTERN=../{repo}_forks/{branch}
     FORK_CONTAINER=1
     FORK_CONTAINER_IMAGE=ubuntu:latest
+    FORK_CONTAINER_DOCKERFILE=/path/to/Dockerfile
     FORK_CONTAINER_NAME=myproject
     FORK_CONTAINER_RUNTIME=podman
     FORK_CONTAINER_KEEP_ALIVE=0
@@ -228,6 +229,7 @@ Configuration:
     FORK_DIR_PATTERN=../{repo}_forks/{branch}
     FORK_CONTAINER=1
     FORK_CONTAINER_IMAGE=ubuntu:latest
+    FORK_CONTAINER_DOCKERFILE=/path/to/Dockerfile
     FORK_CONTAINER_NAME=myproject
     FORK_CONTAINER_RUNTIME=podman
     FORK_CONTAINER_KEEP_ALIVE=0
@@ -241,6 +243,7 @@ Environment Variables:
   FORK_DIR_PATTERN            Example config variable (displays on startup if set)
   FORK_CONTAINER              Set to 1 to enable container mode by default
   FORK_CONTAINER_IMAGE        Container image to use (default: ubuntu:latest)
+  FORK_CONTAINER_DOCKERFILE   Path to Dockerfile to build instead of using FORK_CONTAINER_IMAGE
   FORK_CONTAINER_NAME         Container name prefix (default: none)
   FORK_CONTAINER_RUNTIME      Container runtime to use (default: docker, also supports: podman)
   FORK_CONTAINER_KEEP_ALIVE   Set to 1 to keep containers running (default: 0, containers auto-removed on exit)
@@ -258,6 +261,11 @@ Container Mode:
   
   Container naming: {FORK_CONTAINER_NAME}_{branch}_fork or {branch}_fork
   Mount point: /{repo_name} (read-write access to worktree only)
+  
+  Image Sources:
+    - FORK_CONTAINER_IMAGE: Use a pre-built image (default: ubuntu:latest)
+    - FORK_CONTAINER_DOCKERFILE: Build from a Dockerfile (overrides IMAGE if set)
+      Images are built with tag: fork_{branch}_image
 
 Examples:
   fork new feature-x                   Create worktree for feature-x
@@ -388,6 +396,34 @@ get_container_image() {
 	printf '%s' "${FORK_CONTAINER_IMAGE:-ubuntu:latest}"
 }
 
+get_container_dockerfile() {
+	printf '%s' "${FORK_CONTAINER_DOCKERFILE:-}"
+}
+
+build_container_image() {
+	dockerfile="$1"
+	image_tag="$2"
+	runtime="$(get_container_runtime)"
+
+	if [ ! -f "$dockerfile" ]; then
+		printf '%s\n' "Error: Dockerfile not found: $dockerfile" >&2
+		return 1
+	fi
+
+	dockerfile_dir="$(dirname "$dockerfile")"
+
+	"$runtime" build -t "$image_tag" -f "$dockerfile" "$dockerfile_dir" > /dev/null 2>&1 || {
+		printf '%s\n' "Error: failed to build image from Dockerfile: $dockerfile" >&2
+		return 1
+	}
+
+	if [ "${FORK_CD:-0}" != "1" ]; then
+		printf '%s\n' "Built image: $image_tag from $dockerfile" >&2
+	fi
+
+	return 0
+}
+
 # Get the container name for a fork
 # Arguments:
 #   $1 - Branch/fork name
@@ -442,6 +478,7 @@ create_container() {
 	branch="$1"
 	worktree_path="$2"
 	container_name="$(get_container_name "$branch")"
+	dockerfile="$(get_container_dockerfile)"
 	image="$(get_container_image)"
 	runtime="$(get_container_runtime)"
 	repo_name="$(get_repo_name)"
@@ -450,6 +487,14 @@ create_container() {
 	if ! container_runtime_available; then
 		printf '%s\n' "Error: Container runtime is not available. Please install $runtime." >&2
 		return 1
+	fi
+
+	if [ -n "$dockerfile" ]; then
+		image_tag="fork_${branch}_image"
+		if ! build_container_image "$dockerfile" "$image_tag"; then
+			return 1
+		fi
+		image="$image_tag"
 	fi
 
 	if [ "$keep_alive" = "1" ]; then
@@ -539,7 +584,15 @@ get_container_exec_command() {
 		printf 'FORK_CONTAINER_EXEC=1 %s exec -it %s /bin/sh' "$runtime" "$container_name"
 	else
 		worktree_path_abs="$(cd "$worktree_path" && pwd)"
-		image="$(get_container_image)"
+		dockerfile="$(get_container_dockerfile)"
+
+		if [ -n "$dockerfile" ]; then
+			branch="$(basename "$worktree_path")"
+			image="fork_${branch}_image"
+		else
+			image="$(get_container_image)"
+		fi
+
 		printf 'FORK_CONTAINER_EXEC=1 %s run --rm -it --name %s -v %s:/%s:rw -w /%s %s /bin/sh' \
 			"$runtime" "$container_name" "$worktree_path_abs" "$repo_name" "$repo_name" "$image"
 	fi

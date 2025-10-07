@@ -68,6 +68,7 @@ Configuration:
     FORK_DIR_PATTERN=../{repo}_forks/{branch}
     FORK_CONTAINER=1
     FORK_CONTAINER_IMAGE=ubuntu:latest
+    FORK_CONTAINER_DOCKERFILE=/path/to/Dockerfile
     FORK_CONTAINER_NAME=myproject
     FORK_CONTAINER_RUNTIME=podman
     FORK_CONTAINER_KEEP_ALIVE=0
@@ -158,6 +159,7 @@ Configuration:
     FORK_DIR_PATTERN=../{repo}_forks/{branch}
     FORK_CONTAINER=1
     FORK_CONTAINER_IMAGE=ubuntu:latest
+    FORK_CONTAINER_DOCKERFILE=/path/to/Dockerfile
     FORK_CONTAINER_NAME=myproject
     FORK_CONTAINER_RUNTIME=podman
     FORK_CONTAINER_KEEP_ALIVE=0
@@ -171,6 +173,7 @@ Environment Variables:
   FORK_DIR_PATTERN            Example config variable (displays on startup if set)
   FORK_CONTAINER              Set to 1 to enable container mode by default
   FORK_CONTAINER_IMAGE        Container image to use (default: ubuntu:latest)
+  FORK_CONTAINER_DOCKERFILE   Path to Dockerfile to build instead of using FORK_CONTAINER_IMAGE
   FORK_CONTAINER_NAME         Container name prefix (default: none)
   FORK_CONTAINER_RUNTIME      Container runtime to use (default: docker, also supports: podman)
   FORK_CONTAINER_KEEP_ALIVE   Set to 1 to keep containers running (default: 0, containers auto-removed on exit)
@@ -188,6 +191,11 @@ Container Mode:
   
   Container naming: {FORK_CONTAINER_NAME}_{branch}_fork or {branch}_fork
   Mount point: /{repo_name} (read-write access to worktree only)
+  
+  Image Sources:
+    - FORK_CONTAINER_IMAGE: Use a pre-built image (default: ubuntu:latest)
+    - FORK_CONTAINER_DOCKERFILE: Build from a Dockerfile (overrides IMAGE if set)
+      Images are built with tag: fork_{branch}_image
 
 Examples:
   fork new feature-x                   Create worktree for feature-x
