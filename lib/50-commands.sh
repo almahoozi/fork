@@ -13,23 +13,23 @@ cmd_new() {
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
-		-t | --target)
-			shift
-			[ $# -gt 0 ] || {
-				printf '%s\n' 'Error: -t|--target requires a branch argument' >&2
+			-t | --target)
+				shift
+				[ $# -gt 0 ] || {
+					printf '%s\n' 'Error: -t|--target requires a branch argument' >&2
+					exit 1
+				}
+				base_branch="$1"
+				shift
+				;;
+			-*)
+				printf '%s\n' "Error: unknown option: $1" >&2
 				exit 1
-			}
-			base_branch="$1"
-			shift
-			;;
-		-*)
-			printf '%s\n' "Error: unknown option: $1" >&2
-			exit 1
-			;;
-		*)
-			branches="$branches $1"
-			shift
-			;;
+				;;
+			*)
+				branches="$branches $1"
+				shift
+				;;
 		esac
 	done
 
@@ -66,22 +66,22 @@ cmd_co() {
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
-		-c | --container)
-			use_container=1
-			shift
-			;;
-		-k | --keep-alive)
-			keep_alive_override=1
-			shift
-			;;
-		-*)
-			printf '%s\n' "Error: unknown option: $1" >&2
-			exit 1
-			;;
-		*)
-			branch="$1"
-			shift
-			;;
+			-c | --container)
+				use_container=1
+				shift
+				;;
+			-k | --keep-alive)
+				keep_alive_override=1
+				shift
+				;;
+			-*)
+				printf '%s\n' "Error: unknown option: $1" >&2
+				exit 1
+				;;
+			*)
+				branch="$1"
+				shift
+				;;
 		esac
 	done
 
@@ -115,7 +115,7 @@ cmd_co() {
 				if [ "${FORK_CD:-0}" != "1" ]; then
 					printf '%s\n' "Starting container for '$branch'..." >&2
 				fi
-				"$runtime" start "$container_name" >/dev/null 2>&1 || {
+				"$runtime" start "$container_name" > /dev/null 2>&1 || {
 					printf '%s\n' "Error: failed to start container: $container_name" >&2
 					exit 1
 				}
@@ -200,31 +200,31 @@ cmd_go() {
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
-		-t | --target)
-			shift
-			[ $# -gt 0 ] || {
-				printf '%s\n' 'Error: -t|--target requires a branch argument' >&2
+			-t | --target)
+				shift
+				[ $# -gt 0 ] || {
+					printf '%s\n' 'Error: -t|--target requires a branch argument' >&2
+					exit 1
+				}
+				base_branch="$1"
+				shift
+				;;
+			-c | --container)
+				use_container=1
+				shift
+				;;
+			-k | --keep-alive)
+				keep_alive_override=1
+				shift
+				;;
+			-*)
+				printf '%s\n' "Error: unknown option: $1" >&2
 				exit 1
-			}
-			base_branch="$1"
-			shift
-			;;
-		-c | --container)
-			use_container=1
-			shift
-			;;
-		-k | --keep-alive)
-			keep_alive_override=1
-			shift
-			;;
-		-*)
-			printf '%s\n' "Error: unknown option: $1" >&2
-			exit 1
-			;;
-		*)
-			branch="$1"
-			shift
-			;;
+				;;
+			*)
+				branch="$1"
+				shift
+				;;
 		esac
 	done
 
@@ -259,7 +259,7 @@ cmd_go() {
 				if [ "${FORK_CD:-0}" != "1" ]; then
 					printf '%s\n' "Starting container for '$branch'..." >&2
 				fi
-				"$runtime" start "$container_name" >/dev/null 2>&1 || {
+				"$runtime" start "$container_name" > /dev/null 2>&1 || {
 					printf '%s\n' "Error: failed to start container: $container_name" >&2
 					exit 1
 				}
@@ -312,26 +312,26 @@ cmd_rm() {
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
-		-f | --force)
-			force=1
-			shift
-			;;
-		-a | --all)
-			all=1
-			shift
-			;;
-		-c | --container)
-			remove_containers=1
-			shift
-			;;
-		-*)
-			printf '%s\n' "Error: unknown option: $1" >&2
-			exit 1
-			;;
-		*)
-			branches="$branches $1"
-			shift
-			;;
+			-f | --force)
+				force=1
+				shift
+				;;
+			-a | --all)
+				all=1
+				shift
+				;;
+			-c | --container)
+				remove_containers=1
+				shift
+				;;
+			-*)
+				printf '%s\n' "Error: unknown option: $1" >&2
+				exit 1
+				;;
+			*)
+				branches="$branches $1"
+				shift
+				;;
 		esac
 	done
 
@@ -360,16 +360,16 @@ cmd_rm() {
 					print path "|" branch
 				}
 			}
-		' >"$tmpfile"
+		' > "$tmpfile"
 
 		while IFS='|' read -r path branch; do
 			[ -n "$path" ] && [ -n "$branch" ] || continue
 			case "$path" in
-			"$worktree_base"/*)
-				branches="$branches $branch"
-				;;
+				"$worktree_base"/*)
+					branches="$branches $branch"
+					;;
 			esac
-		done <"$tmpfile"
+		done < "$tmpfile"
 		rm -f "$tmpfile"
 	elif [ -z "$branches" ]; then
 		# No branch specified, use current
@@ -421,26 +421,26 @@ cmd_list() {
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
-		-m | --merged)
-			filter_mode="merged"
-			shift
-			;;
-		-u | --unmerged)
-			filter_mode="unmerged"
-			shift
-			;;
-		-d | --dirty)
-			filter_dirty="dirty"
-			shift
-			;;
-		-c | --clean)
-			filter_dirty="clean"
-			shift
-			;;
-		*)
-			printf '%s\n' "Error: unknown option: $1" >&2
-			exit 1
-			;;
+			-m | --merged)
+				filter_mode="merged"
+				shift
+				;;
+			-u | --unmerged)
+				filter_mode="unmerged"
+				shift
+				;;
+			-d | --dirty)
+				filter_dirty="dirty"
+				shift
+				;;
+			-c | --clean)
+				filter_dirty="clean"
+				shift
+				;;
+			*)
+				printf '%s\n' "Error: unknown option: $1" >&2
+				exit 1
+				;;
 		esac
 	done
 
@@ -452,7 +452,7 @@ cmd_list() {
 	fi
 
 	tmpfile="${worktree_base}/.fork_list.$$"
-	: >"$tmpfile"
+	: > "$tmpfile"
 
 	git worktree list --porcelain | awk '
 		/^worktree / { path = substr($0, 10) }
@@ -472,42 +472,42 @@ cmd_list() {
 		[ -n "$path" ] && [ -n "$branch" ] || continue
 
 		case "$path" in
-		"$worktree_base"/*)
-			merged=0
-			if is_branch_merged "$branch"; then
-				merged=1
-			fi
-
-			dirty=0
-			if is_worktree_dirty "$path"; then
-				dirty=1
-			fi
-
-			show=0
-			if [ "$filter_mode" = "all" ]; then
-				show=1
-			elif [ "$filter_mode" = "merged" ] && [ $merged -eq 1 ]; then
-				show=1
-			elif [ "$filter_mode" = "unmerged" ] && [ $merged -eq 0 ]; then
-				show=1
-			fi
-
-			if [ $show -eq 1 ] && [ -n "$filter_dirty" ]; then
-				if [ "$filter_dirty" = "dirty" ] && [ $dirty -eq 0 ]; then
-					show=0
-				elif [ "$filter_dirty" = "clean" ] && [ $dirty -eq 1 ]; then
-					show=0
+			"$worktree_base"/*)
+				merged=0
+				if is_branch_merged "$branch"; then
+					merged=1
 				fi
-			fi
 
-			if [ $show -eq 1 ]; then
-				merge_status="unmerged"
-				[ $merged -eq 1 ] && merge_status="merged"
-				dirty_status="clean"
-				[ $dirty -eq 1 ] && dirty_status="dirty"
-				printf '%s\t%s\t%s\t%s\n' "$branch" "$merge_status" "$dirty_status" "$path" >>"$tmpfile"
-			fi
-			;;
+				dirty=0
+				if is_worktree_dirty "$path"; then
+					dirty=1
+				fi
+
+				show=0
+				if [ "$filter_mode" = "all" ]; then
+					show=1
+				elif [ "$filter_mode" = "merged" ] && [ $merged -eq 1 ]; then
+					show=1
+				elif [ "$filter_mode" = "unmerged" ] && [ $merged -eq 0 ]; then
+					show=1
+				fi
+
+				if [ $show -eq 1 ] && [ -n "$filter_dirty" ]; then
+					if [ "$filter_dirty" = "dirty" ] && [ $dirty -eq 0 ]; then
+						show=0
+					elif [ "$filter_dirty" = "clean" ] && [ $dirty -eq 1 ]; then
+						show=0
+					fi
+				fi
+
+				if [ $show -eq 1 ]; then
+					merge_status="unmerged"
+					[ $merged -eq 1 ] && merge_status="merged"
+					dirty_status="clean"
+					[ $dirty -eq 1 ] && dirty_status="dirty"
+					printf '%s\t%s\t%s\t%s\n' "$branch" "$merge_status" "$dirty_status" "$path" >> "$tmpfile"
+				fi
+				;;
 		esac
 	done
 
@@ -571,26 +571,26 @@ cmd_clean() {
 				print path "|" branch
 			}
 		}
-	' >"$tmpfile"
+	' > "$tmpfile"
 
 	queue_file="${worktree_base}/.fork_clean_queue.$$"
-	: >"$queue_file"
+	: > "$queue_file"
 
 	while IFS='|' read -r path branch; do
 		[ -n "$path" ] && [ -n "$branch" ] || continue
 
 		case "$path" in
-		"$worktree_base"/*)
-			if is_branch_merged "$branch" && ! is_worktree_dirty "$path"; then
-				if [ -n "$current_branch" ] && [ "$branch" = "$current_branch" ] && [ -n "$current_worktree_path" ] && [ "$path" = "$current_worktree_path" ]; then
-					current_entry="$path|$branch"
-				else
-					printf '%s|%s\n' "$path" "$branch" >>"$queue_file"
+			"$worktree_base"/*)
+				if is_branch_merged "$branch" && ! is_worktree_dirty "$path"; then
+					if [ -n "$current_branch" ] && [ "$branch" = "$current_branch" ] && [ -n "$current_worktree_path" ] && [ "$path" = "$current_worktree_path" ]; then
+						current_entry="$path|$branch"
+					else
+						printf '%s|%s\n' "$path" "$branch" >> "$queue_file"
+					fi
 				fi
-			fi
-			;;
+				;;
 		esac
-	done <"$tmpfile"
+	done < "$tmpfile"
 
 	rm -f "$tmpfile"
 
@@ -599,12 +599,12 @@ cmd_clean() {
 	while IFS='|' read -r path branch; do
 		[ -n "$path" ] && [ -n "$branch" ] || continue
 
-		if (cd "$main_root" && git worktree remove "$path" 2>/dev/null) || (cd "$main_root" && git worktree remove --force "$path"); then
+		if (cd "$main_root" && git worktree remove "$path" 2> /dev/null) || (cd "$main_root" && git worktree remove --force "$path"); then
 			printf '%s\n' "Removed worktree: $branch" >&2
 			remove_container "$branch" || true
 			removed=1
 		fi
-	done <"$queue_file"
+	done < "$queue_file"
 
 	rm -f "$queue_file"
 
@@ -612,7 +612,7 @@ cmd_clean() {
 	if [ -n "$current_entry" ]; then
 		current_path=${current_entry%%|*}
 		current_branch_name=${current_entry#*|}
-		if (cd "$main_root" && git worktree remove "$current_path" 2>/dev/null) || (cd "$main_root" && git worktree remove --force "$current_path"); then
+		if (cd "$main_root" && git worktree remove "$current_path" 2> /dev/null) || (cd "$main_root" && git worktree remove --force "$current_path"); then
 			printf '%s\n' "Removed worktree: $current_branch_name" >&2
 			remove_container "$current_branch_name" || true
 			removed=1

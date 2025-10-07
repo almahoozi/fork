@@ -18,19 +18,19 @@ cmd_sh() {
 			exit 1
 		fi
 		case "$SHELL" in
-		*/bash)
-			shell="bash"
-			;;
-		*/zsh)
-			shell="zsh"
-			;;
-		*/fish)
-			shell="fish"
-			;;
-		*)
-			printf '%s\n' "Error: unknown shell in \$SHELL: $SHELL (supported: bash, zsh, fish)" >&2
-			exit 1
-			;;
+			*/bash)
+				shell="bash"
+				;;
+			*/zsh)
+				shell="zsh"
+				;;
+			*/fish)
+				shell="fish"
+				;;
+			*)
+				printf '%s\n' "Error: unknown shell in \$SHELL: $SHELL (supported: bash, zsh, fish)" >&2
+				exit 1
+				;;
 		esac
 	fi
 
@@ -45,35 +45,35 @@ cmd_sh() {
 				[ -z "$line" ] && continue
 
 				case "$line" in
-				*=*)
-					var_name="${line%%=*}"
-					var_value="${line#*=}"
+					*=*)
+						var_name="${line%%=*}"
+						var_value="${line#*=}"
 
-					var_value_escaped=$(printf "%s" "$var_value" | sed "s/'/'\\\\''/g")
+						var_value_escaped=$(printf "%s" "$var_value" | sed "s/'/'\\\\''/g")
 
-					case "$var_name" in
-					FORK_*)
-						if [ -z "$env_vars" ]; then
-							env_vars="$var_name='$var_value_escaped'"
-						else
-							env_vars="$env_vars $var_name='$var_value_escaped'"
-						fi
-						if [ -z "$env_list" ]; then
-							env_list="$var_name"
-						else
-							env_list="$env_list $var_name"
-						fi
+						case "$var_name" in
+							FORK_*)
+								if [ -z "$env_vars" ]; then
+									env_vars="$var_name='$var_value_escaped'"
+								else
+									env_vars="$env_vars $var_name='$var_value_escaped'"
+								fi
+								if [ -z "$env_list" ]; then
+									env_list="$var_name"
+								else
+									env_list="$env_list $var_name"
+								fi
+								;;
+						esac
 						;;
-					esac
-					;;
 				esac
-			done <"$FORK_ENV"
+			done < "$FORK_ENV"
 		fi
 	fi
 
 	case "$shell" in
-	bash | zsh)
-		cat <<EOF
+		bash | zsh)
+			cat << EOF
 fork() {
     case "\$1" in
         co|go|main|rm|clean)
@@ -96,9 +96,9 @@ fork() {
     esac
 }
 EOF
-		;;
-	fish)
-		cat <<EOF
+			;;
+		fish)
+			cat << EOF
 function fork
     switch \$argv[1]
         case co go main rm clean
@@ -115,10 +115,10 @@ function fork
     end
 end
 EOF
-		;;
-	*)
-		printf '%s\n' "Error: unknown shell: $shell (supported: bash, zsh, fish)" >&2
-		exit 1
-		;;
+			;;
+		*)
+			printf '%s\n' "Error: unknown shell: $shell (supported: bash, zsh, fish)" >&2
+			exit 1
+			;;
 	esac
 }

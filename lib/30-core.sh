@@ -4,7 +4,7 @@
 # Returns:
 #   0 if command exists, 1 otherwise
 command_exists() {
-  command -v "$1" >/dev/null 2>&1
+	command -v "$1" > /dev/null 2>&1
 }
 
 # Get the root directory of the current git repository
@@ -15,10 +15,10 @@ command_exists() {
 # Exits:
 #   1 if not in a git repository
 get_repo_root() {
-  git rev-parse --show-toplevel 2>/dev/null || {
-    printf '%s\n' 'Error: not in a git repository' >&2
-    exit 1
-  }
+	git rev-parse --show-toplevel 2> /dev/null || {
+		printf '%s\n' 'Error: not in a git repository' >&2
+		exit 1
+	}
 }
 
 # Get the root directory of the main repository
@@ -28,13 +28,13 @@ get_repo_root() {
 # Returns:
 #   0 on success
 get_main_repo_root() {
-  common_dir="$(git rev-parse --git-common-dir 2>/dev/null)"
-  if [ -n "$common_dir" ] && [ "$common_dir" != ".git" ]; then
-    # We're in a worktree, get the main repo root
-    cd "$(dirname "$common_dir")" && pwd
-  else
-    get_repo_root
-  fi
+	common_dir="$(git rev-parse --git-common-dir 2> /dev/null)"
+	if [ -n "$common_dir" ] && [ "$common_dir" != ".git" ]; then
+		# We're in a worktree, get the main repo root
+		cd "$(dirname "$common_dir")" && pwd
+	else
+		get_repo_root
+	fi
 }
 
 # Get the name of the repository
@@ -43,7 +43,7 @@ get_main_repo_root() {
 # Returns:
 #   0 on success
 get_repo_name() {
-  basename "$(get_main_repo_root)"
+	basename "$(get_main_repo_root)"
 }
 
 # Get the base directory where worktrees are stored
@@ -53,9 +53,9 @@ get_repo_name() {
 # Returns:
 #   0 on success
 get_worktree_base() {
-  repo_name="$(get_repo_name)"
-  repo_root="$(get_main_repo_root)"
-  printf '%s\n' "$(dirname "$repo_root")/${repo_name}_forks"
+	repo_name="$(get_repo_name)"
+	repo_root="$(get_main_repo_root)"
+	printf '%s\n' "$(dirname "$repo_root")/${repo_name}_forks"
 }
 
 # Get the full path to a specific worktree
@@ -66,6 +66,6 @@ get_worktree_base() {
 # Returns:
 #   0 on success
 get_worktree_path() {
-  branch="$1"
-  printf '%s\n' "$(get_worktree_base)/$branch"
+	branch="$1"
+	printf '%s\n' "$(get_worktree_base)/$branch"
 }
