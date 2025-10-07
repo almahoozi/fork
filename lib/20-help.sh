@@ -38,8 +38,10 @@ Usage: fork <command> [args]
 Commands:
   new <branch>... [-t|--target <base>]    Create worktrees
   co <branch> [-c|--container]            Change to worktree
+              [-k|--keep-alive]
   go <branch> [-t|--target <base>]        Change to worktree (create if needed)
               [-c|--container]
+              [-k|--keep-alive]
   main                                    Go to main worktree
   rm [branch...] [-f|--force] [-a|--all]  Remove worktree(s)
                  [-c|--container]
@@ -68,6 +70,7 @@ Configuration:
     FORK_CONTAINER_IMAGE=ubuntu:latest
     FORK_CONTAINER_NAME=myproject
     FORK_CONTAINER_RUNTIME=podman
+    FORK_CONTAINER_KEEP_ALIVE=0
 
 Examples:
   fork new feature-x
@@ -96,15 +99,17 @@ Commands:
       otherwise creates a new local branch.
       -t, --target <base>  Create from <base> instead of main
 
-  co <branch> [-c|--container]
+  co <branch> [-c|--container] [-k|--keep-alive]
       Print path to worktree. Use: cd \$(fork co <branch>)
       With -c, opens an interactive shell in a container for isolated work.
       -c, --container  Open worktree in container
+      -k, --keep-alive Keep container running in background (requires -c)
 
-  go <branch> [-t|--target <base>] [-c|--container]
+  go <branch> [-t|--target <base>] [-c|--container] [-k|--keep-alive]
       Go to worktree (create if doesn't exist). Same options as 'new'.
       With -c, opens an interactive shell in a container for isolated work.
       -c, --container  Open worktree in container
+      -k, --keep-alive Keep container running in background (requires -c)
 
   main
       Go to main/primary worktree.
@@ -155,24 +160,31 @@ Configuration:
     FORK_CONTAINER_IMAGE=ubuntu:latest
     FORK_CONTAINER_NAME=myproject
     FORK_CONTAINER_RUNTIME=podman
+    FORK_CONTAINER_KEEP_ALIVE=0
   
   When using shell integration (fork sh), env vars are automatically
   embedded in the generated function and passed to every fork invocation.
 
 Environment Variables:
-  FORK_ENV                Path to configuration file (optional)
-  FORK_CD                 Internal flag for shell integration (do not set manually)
-  FORK_DIR_PATTERN        Example config variable (displays on startup if set)
-  FORK_CONTAINER          Set to 1 to enable container mode by default
-  FORK_CONTAINER_IMAGE    Container image to use (default: ubuntu:latest)
-  FORK_CONTAINER_NAME     Container name prefix (default: none)
-  FORK_CONTAINER_RUNTIME  Container runtime to use (default: docker, also supports: podman)
+  FORK_ENV                    Path to configuration file (optional)
+  FORK_CD                     Internal flag for shell integration (do not set manually)
+  FORK_DIR_PATTERN            Example config variable (displays on startup if set)
+  FORK_CONTAINER              Set to 1 to enable container mode by default
+  FORK_CONTAINER_IMAGE        Container image to use (default: ubuntu:latest)
+  FORK_CONTAINER_NAME         Container name prefix (default: none)
+  FORK_CONTAINER_RUNTIME      Container runtime to use (default: docker, also supports: podman)
+  FORK_CONTAINER_KEEP_ALIVE   Set to 1 to keep containers running (default: 0, containers auto-removed on exit)
 
 Container Mode:
   Container mode creates isolated containers for each fork, mounting only
   the worktree directory. This provides isolation from the host system.
   
   Requirements: Docker or Podman must be installed and running.
+  
+  By default, containers are created with --rm flag and are automatically
+  removed when you exit. Set FORK_CONTAINER_KEEP_ALIVE=1 to keep containers
+  running in the background for faster re-entry, or use the -k|--keep-alive
+  flag on co/go commands.
   
   Container naming: {FORK_CONTAINER_NAME}_{branch}_fork or {branch}_fork
   Mount point: /{repo_name} (read-write access to worktree only)
@@ -182,7 +194,8 @@ Examples:
   fork new feat-a feat-b               Create multiple worktrees
   fork new bugfix --target develop     Create from develop branch
   fork go feature-x                    Go to feature-x (create if needed)
-  fork go feature-x -c                 Go to feature-x in container
+  fork go feature-x -c                 Go to feature-x in container (auto-removed on exit)
+  fork go feature-x -c -k              Go to feature-x in container (kept alive)
   fork co feature-x -c                 Open existing worktree in container
   fork main                            Go to main worktree
   fork rm                              Remove current worktree

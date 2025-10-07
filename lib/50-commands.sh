@@ -48,6 +48,7 @@ cmd_new() {
 # Arguments:
 #   $1 - Branch name
 #   -c|--container - Use container mode
+#   -k|--keep-alive - Keep container running (requires -c)
 # Outputs:
 #   Worktree path to stdout (or container exec command if -c flag set)
 #   Status message to stderr (unless FORK_CD=1)
@@ -55,10 +56,13 @@ cmd_new() {
 #   FORK_CD - Set to 1 when called from shell integration
 #   FORK_LAST - Exports previous directory when FORK_CD=1
 #   FORK_CONTAINER - Set to 1 to enable container mode
+#   FORK_CONTAINER_KEEP_ALIVE - Set to 1 to keep containers running
 # Exits:
 #   1 if worktree doesn't exist or invalid arguments
 cmd_co() {
 	use_container="${FORK_CONTAINER:-0}"
+	keep_alive_override=""
+	branch=""
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
@@ -66,22 +70,25 @@ cmd_co() {
 			use_container=1
 			shift
 			;;
+		-k | --keep-alive)
+			keep_alive_override=1
+			shift
+			;;
 		-*)
 			printf '%s\n' "Error: unknown option: $1" >&2
 			exit 1
 			;;
 		*)
-			break
+			branch="$1"
+			shift
 			;;
 		esac
 	done
 
-	if [ $# -ne 1 ]; then
-		printf '%s\n' 'Usage: fork co <branch> [-c|--container]' >&2
+	if [ -z "$branch" ]; then
+		printf '%s\n' 'Usage: fork co <branch> [-c|--container] [-k|--keep-alive]' >&2
 		exit 1
 	fi
-
-	branch="$1"
 	path="$(get_worktree_path "$branch")"
 
 	if ! worktree_exists "$branch"; then
@@ -91,23 +98,32 @@ cmd_co() {
 
 	if [ "$use_container" = "1" ]; then
 		container_name="$(get_container_name "$branch")"
+		if [ -n "$keep_alive_override" ]; then
+			keep_alive="$keep_alive_override"
+		else
+			keep_alive="${FORK_CONTAINER_KEEP_ALIVE:-0}"
+		fi
+		runtime="$(get_container_runtime)"
 
-		if ! container_exists "$container_name"; then
-			if [ "${FORK_CD:-0}" != "1" ]; then
-				printf '%s\n' "Container does not exist for '$branch', creating..." >&2
+		if [ "$keep_alive" = "1" ]; then
+			if ! container_exists "$container_name"; then
+				if [ "${FORK_CD:-0}" != "1" ]; then
+					printf '%s\n' "Container does not exist for '$branch', creating..." >&2
+				fi
+				FORK_CONTAINER_KEEP_ALIVE="$keep_alive" create_container "$branch" "$path" || exit 1
+			elif ! container_is_running "$container_name"; then
+				if [ "${FORK_CD:-0}" != "1" ]; then
+					printf '%s\n' "Starting container for '$branch'..." >&2
+				fi
+				"$runtime" start "$container_name" >/dev/null 2>&1 || {
+					printf '%s\n' "Error: failed to start container: $container_name" >&2
+					exit 1
+				}
 			fi
-			create_container "$branch" "$path" || exit 1
-		elif ! container_is_running "$container_name"; then
-			if [ "${FORK_CD:-0}" != "1" ]; then
-				printf '%s\n' "Starting container for '$branch'..." >&2
-			fi
-			docker start "$container_name" >/dev/null 2>&1 || {
-				printf '%s\n' "Error: failed to start container: $container_name" >&2
-				exit 1
-			}
 		fi
 
-		printf '%s' "$(get_container_exec_command "$container_name")"
+		export FORK_CONTAINER_KEEP_ALIVE="$keep_alive"
+		printf '%s' "$(get_container_exec_command "$container_name" "$path")"
 	else
 		printf '%s\n' "$path"
 	fi
@@ -166,17 +182,21 @@ cmd_main() {
 #   $1 - Branch name
 #   -t|--target <base> - Base branch to create from if needed (optional)
 #   -c|--container - Use container mode
+#   -k|--keep-alive - Keep container running (requires -c)
 # Outputs:
 #   Worktree path to stdout (or container exec command if -c flag set)
 #   Status messages to stderr
 # Globals:
 #   FORK_CD - Set to 1 when called from shell integration
 #   FORK_CONTAINER - Set to 1 to enable container mode
+#   FORK_CONTAINER_KEEP_ALIVE - Set to 1 to keep containers running
 # Exits:
 #   1 on error (invalid arguments or creation failure)
 cmd_go() {
 	base_branch="main"
 	use_container="${FORK_CONTAINER:-0}"
+	keep_alive_override=""
+	branch=""
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
@@ -193,22 +213,25 @@ cmd_go() {
 			use_container=1
 			shift
 			;;
+		-k | --keep-alive)
+			keep_alive_override=1
+			shift
+			;;
 		-*)
 			printf '%s\n' "Error: unknown option: $1" >&2
 			exit 1
 			;;
 		*)
-			break
+			branch="$1"
+			shift
 			;;
 		esac
 	done
 
-	[ $# -eq 1 ] || {
-		printf '%s\n' 'Usage: fork go <branch> [-t|--target <base>] [-c|--container]' >&2
+	[ -n "$branch" ] || {
+		printf '%s\n' 'Usage: fork go <branch> [-t|--target <base>] [-c|--container] [-k|--keep-alive]' >&2
 		exit 1
 	}
-
-	branch="$1"
 	path="$(get_worktree_path "$branch")"
 
 	created=0
@@ -219,23 +242,32 @@ cmd_go() {
 
 	if [ "$use_container" = "1" ]; then
 		container_name="$(get_container_name "$branch")"
+		if [ -n "$keep_alive_override" ]; then
+			keep_alive="$keep_alive_override"
+		else
+			keep_alive="${FORK_CONTAINER_KEEP_ALIVE:-0}"
+		fi
+		runtime="$(get_container_runtime)"
 
-		if ! container_exists "$container_name"; then
-			if [ "${FORK_CD:-0}" != "1" ]; then
-				printf '%s\n' "Creating container for '$branch'..." >&2
+		if [ "$keep_alive" = "1" ]; then
+			if ! container_exists "$container_name"; then
+				if [ "${FORK_CD:-0}" != "1" ]; then
+					printf '%s\n' "Creating container for '$branch'..." >&2
+				fi
+				FORK_CONTAINER_KEEP_ALIVE="$keep_alive" create_container "$branch" "$path" || exit 1
+			elif ! container_is_running "$container_name"; then
+				if [ "${FORK_CD:-0}" != "1" ]; then
+					printf '%s\n' "Starting container for '$branch'..." >&2
+				fi
+				"$runtime" start "$container_name" >/dev/null 2>&1 || {
+					printf '%s\n' "Error: failed to start container: $container_name" >&2
+					exit 1
+				}
 			fi
-			create_container "$branch" "$path" || exit 1
-		elif ! container_is_running "$container_name"; then
-			if [ "${FORK_CD:-0}" != "1" ]; then
-				printf '%s\n' "Starting container for '$branch'..." >&2
-			fi
-			docker start "$container_name" >/dev/null 2>&1 || {
-				printf '%s\n' "Error: failed to start container: $container_name" >&2
-				exit 1
-			}
 		fi
 
-		printf '%s' "$(get_container_exec_command "$container_name")"
+		export FORK_CONTAINER_KEEP_ALIVE="$keep_alive"
+		printf '%s' "$(get_container_exec_command "$container_name" "$path")"
 	else
 		printf '%s\n' "$path"
 	fi

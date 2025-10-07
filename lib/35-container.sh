@@ -72,6 +72,8 @@ container_is_running() {
 # Arguments:
 #   $1 - Branch/fork name
 #   $2 - Worktree path
+# Globals:
+#   FORK_CONTAINER_KEEP_ALIVE - Set to 1 to keep container running in background
 # Outputs:
 #   Status messages to stderr
 # Returns:
@@ -83,39 +85,42 @@ create_container() {
 	image="$(get_container_image)"
 	runtime="$(get_container_runtime)"
 	repo_name="$(get_repo_name)"
+	keep_alive="${FORK_CONTAINER_KEEP_ALIVE:-0}"
 
 	if ! container_runtime_available; then
 		printf '%s\n' "Error: Container runtime is not available. Please install $runtime." >&2
 		return 1
 	fi
 
-	if container_exists "$container_name"; then
-		if container_is_running "$container_name"; then
-			return 0
-		else
-			"$runtime" start "$container_name" >/dev/null 2>&1 || {
-				printf '%s\n' "Error: failed to start existing container: $container_name" >&2
-				return 1
-			}
-			return 0
+	if [ "$keep_alive" = "1" ]; then
+		if container_exists "$container_name"; then
+			if container_is_running "$container_name"; then
+				return 0
+			else
+				"$runtime" start "$container_name" >/dev/null 2>&1 || {
+					printf '%s\n' "Error: failed to start existing container: $container_name" >&2
+					return 1
+				}
+				return 0
+			fi
 		fi
-	fi
 
-	worktree_path_abs="$(cd "$worktree_path" && pwd)"
+		worktree_path_abs="$(cd "$worktree_path" && pwd)"
 
-	"$runtime" run -d \
-		--name "$container_name" \
-		-v "$worktree_path_abs:/$repo_name:rw" \
-		-w "/$repo_name" \
-		--entrypoint /bin/sh \
-		"$image" \
-		-c "while true; do sleep 3600; done" >/dev/null 2>&1 || {
-		printf '%s\n' "Error: failed to create container: $container_name" >&2
-		return 1
-	}
+		"$runtime" run -d \
+			--name "$container_name" \
+			-v "$worktree_path_abs:/$repo_name:rw" \
+			-w "/$repo_name" \
+			--entrypoint /bin/sh \
+			"$image" \
+			-c "while true; do sleep 3600; done" >/dev/null 2>&1 || {
+			printf '%s\n' "Error: failed to create container: $container_name" >&2
+			return 1
+		}
 
-	if [ "${FORK_CD:-0}" != "1" ]; then
-		printf '%s\n' "Created container: $container_name" >&2
+		if [ "${FORK_CD:-0}" != "1" ]; then
+			printf '%s\n' "Created container: $container_name" >&2
+		fi
 	fi
 
 	return 0
@@ -156,12 +161,26 @@ remove_container() {
 # Get the command to enter a container
 # Arguments:
 #   $1 - Container name
+#   $2 - Worktree path
+# Globals:
+#   FORK_CONTAINER_KEEP_ALIVE - Set to 1 to keep container running in background
 # Outputs:
 #   Command string to stdout with FORK_CONTAINER_EXEC=1 prefix
 # Returns:
 #   0 always
 get_container_exec_command() {
 	container_name="$1"
+	worktree_path="$2"
 	runtime="$(get_container_runtime)"
-	printf 'FORK_CONTAINER_EXEC=1 %s exec -it %s /bin/sh' "$runtime" "$container_name"
+	repo_name="$(get_repo_name)"
+	keep_alive="${FORK_CONTAINER_KEEP_ALIVE:-0}"
+
+	if [ "$keep_alive" = "1" ]; then
+		printf 'FORK_CONTAINER_EXEC=1 %s exec -it %s /bin/sh' "$runtime" "$container_name"
+	else
+		worktree_path_abs="$(cd "$worktree_path" && pwd)"
+		image="$(get_container_image)"
+		printf 'FORK_CONTAINER_EXEC=1 %s run --rm -it --name %s -v %s:/%s:rw -w /%s %s /bin/sh' \
+			"$runtime" "$container_name" "$worktree_path_abs" "$repo_name" "$repo_name" "$image"
+	fi
 }
