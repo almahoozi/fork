@@ -484,12 +484,12 @@ remove_container() {
 # Arguments:
 #   $1 - Container name
 # Outputs:
-#   Command string to stdout
+#   Command string to stdout with FORK_CONTAINER_EXEC=1 prefix
 # Returns:
 #   0 always
 get_container_exec_command() {
 	container_name="$1"
-	printf 'docker exec -it %s /bin/sh' "$container_name"
+	printf 'FORK_CONTAINER_EXEC=1 docker exec -it %s /bin/sh' "$container_name"
 }
 
 # Check if a local branch exists
@@ -733,7 +733,6 @@ cmd_co() {
 	fi
 
 	if [ "$use_container" = "1" ]; then
-		export FORK_CONTAINER_EXEC=1
 		container_name="$(get_container_name "$branch")"
 
 		if ! container_exists "$container_name"; then
@@ -862,7 +861,6 @@ cmd_go() {
 	fi
 
 	if [ "$use_container" = "1" ]; then
-		export FORK_CONTAINER_EXEC=1
 		container_name="$(get_container_name "$branch")"
 
 		if ! container_exists "$container_name"; then
@@ -1323,12 +1321,14 @@ fork() {
             local output
             output=\$(FORK_CD=1 $env_vars command fork "\$@")
             if [ \$? -eq 0 ] && [ -n "\$output" ]; then
-                if [ "\${FORK_CONTAINER_EXEC:-0}" = "1" ]; then
-                    unset FORK_CONTAINER_EXEC
+                case "\$output" in
+                FORK_CONTAINER_EXEC=1\ *)
                     eval "\$output"
-                else
+                    ;;
+                *)
                     builtin cd "\$output"
-                fi
+                    ;;
+                esac
             fi
             ;;
         *)
@@ -1345,8 +1345,7 @@ function fork
         case co go main rm clean
             set output (env FORK_CD=1 $env_vars command fork \$argv)
             if test \$status -eq 0; and test -n "\$output"
-                if test "\$FORK_CONTAINER_EXEC" = "1"
-                    set -e FORK_CONTAINER_EXEC
+                if string match -q "FORK_CONTAINER_EXEC=1 *" "\$output"
                     eval \$output
                 else
                     builtin cd \$output

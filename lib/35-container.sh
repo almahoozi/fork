@@ -140,10 +140,10 @@ remove_container() {
 # Arguments:
 #   $1 - Container name
 # Outputs:
-#   Command string to stdout
+#   Command string to stdout with FORK_CONTAINER_EXEC=1 prefix
 # Returns:
 #   0 always
 get_container_exec_command() {
 	container_name="$1"
-	printf 'docker exec -it %s /bin/sh' "$container_name"
+	printf 'FORK_CONTAINER_EXEC=1 docker exec -it %s /bin/sh' "$container_name"
 }

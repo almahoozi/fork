@@ -90,7 +90,6 @@ cmd_co() {
 	fi
 
 	if [ "$use_container" = "1" ]; then
-		export FORK_CONTAINER_EXEC=1
 		container_name="$(get_container_name "$branch")"
 
 		if ! container_exists "$container_name"; then
@@ -219,7 +218,6 @@ cmd_go() {
 	fi
 
 	if [ "$use_container" = "1" ]; then
-		export FORK_CONTAINER_EXEC=1
 		container_name="$(get_container_name "$branch")"
 
 		if ! container_exists "$container_name"; then

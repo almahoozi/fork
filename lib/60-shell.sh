@@ -80,12 +80,14 @@ fork() {
             local output
             output=\$(FORK_CD=1 $env_vars command fork "\$@")
             if [ \$? -eq 0 ] && [ -n "\$output" ]; then
-                if [ "\${FORK_CONTAINER_EXEC:-0}" = "1" ]; then
-                    unset FORK_CONTAINER_EXEC
+                case "\$output" in
+                FORK_CONTAINER_EXEC=1\ *)
                     eval "\$output"
-                else
+                    ;;
+                *)
                     builtin cd "\$output"
-                fi
+                    ;;
+                esac
             fi
             ;;
         *)
@@ -102,8 +104,7 @@ function fork
         case co go main rm clean
             set output (env FORK_CD=1 $env_vars command fork \$argv)
             if test \$status -eq 0; and test -n "\$output"
-                if test "\$FORK_CONTAINER_EXEC" = "1"
-                    set -e FORK_CONTAINER_EXEC
+                if string match -q "FORK_CONTAINER_EXEC=1 *" "\$output"
                     eval \$output
                 else
                     builtin cd \$output
