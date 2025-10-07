@@ -18,6 +18,14 @@ jobs:
       - name: Set git default branch to main
         run: git config --global init.defaultBranch main
 
+      - name: Install shfmt
+        run: |
+          curl -sS https://webi.sh/shfmt | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Check formatting
+        run: sh fmt.sh --check
+
       - name: Syntax check modules
         run: sh -n lib/*.sh
 

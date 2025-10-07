@@ -17,155 +17,155 @@ USE_CACHE=1
 ORIG_ARGS="$*"
 
 usage() {
-  printf '%s\n' "Usage: $0 [--fast|-f] [--verbose|-v] [--no-cache|-n]"
+	printf '%s\n' "Usage: $0 [--fast|-f] [--verbose|-v] [--no-cache|-n]"
 }
 
 while [ "$#" -gt 0 ]; do
-  case "$1" in
-  --fast | -f | fast)
-    FAST=1
-    ;;
-  --verbose | -v | verbose)
-    VERBOSE=1
-    ;;
-  --no-cache | -n | nocache | no-cache)
-    USE_CACHE=0
-    ;;
-  --help | -h)
-    usage
-    exit 0
-    ;;
-  *)
-    printf '%s\n' "Error: unknown option '$1'" >&2
-    usage >&2
-    exit 2
-    ;;
-  esac
-  shift
+	case "$1" in
+	--fast | -f | fast)
+		FAST=1
+		;;
+	--verbose | -v | verbose)
+		VERBOSE=1
+		;;
+	--no-cache | -n | nocache | no-cache)
+		USE_CACHE=0
+		;;
+	--help | -h)
+		usage
+		exit 0
+		;;
+	*)
+		printf '%s\n' "Error: unknown option '$1'" >&2
+		usage >&2
+		exit 2
+		;;
+	esac
+	shift
 done
 
 if [ "${FORK_TEST_CACHE_FORCE_VERBOSE:-0}" -eq 1 ]; then
-  VERBOSE=1
+	VERBOSE=1
 fi
 
 display_results() {
-  result_file=$1
-  result_status=$2
-  if [ "$VERBOSE" -eq 1 ]; then
-    cat "$result_file"
-  else
-    if [ "$result_status" -eq 0 ]; then
-      awk 'BEGIN{capture=0} /^---/{capture=1} capture{print}' "$result_file"
-    else
-      cat "$result_file"
-    fi
-  fi
+	result_file=$1
+	result_status=$2
+	if [ "$VERBOSE" -eq 1 ]; then
+		cat "$result_file"
+	else
+		if [ "$result_status" -eq 0 ]; then
+			awk 'BEGIN{capture=0} /^---/{capture=1} capture{print}' "$result_file"
+		else
+			cat "$result_file"
+		fi
+	fi
 }
 
 hash_file() {
-  file_path=$1
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$file_path" | awk '{print $1}'
-  elif command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "$file_path" | awk '{print $1}'
-  else
-    git hash-object "$file_path"
-  fi
+	file_path=$1
+	if command -v sha256sum >/dev/null 2>&1; then
+		sha256sum "$file_path" | awk '{print $1}'
+	elif command -v shasum >/dev/null 2>&1; then
+		shasum -a 256 "$file_path" | awk '{print $1}'
+	else
+		git hash-object "$file_path"
+	fi
 }
 
 project_root() {
-  dirname "$0" | {
-    IFS=/ read -r first rest || true
-    if [ -z "$rest" ]; then
-      echo "."
-    else
-      echo "${first}${rest:+/}${rest%%/*}"
-    fi
-  }
+	dirname "$0" | {
+		IFS=/ read -r first rest || true
+		if [ -z "$rest" ]; then
+			echo "."
+		else
+			echo "${first}${rest:+/}${rest%%/*}"
+		fi
+	}
 }
 
 SCRIPT_PATH=$0
 case "$SCRIPT_PATH" in
 /*)
-  :
-  ;;
+	:
+	;;
 *)
-  SCRIPT_PATH="$(pwd)/$SCRIPT_PATH"
-  ;;
+	SCRIPT_PATH="$(pwd)/$SCRIPT_PATH"
+	;;
 esac
 
 SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
 FORK_SH="$SCRIPT_DIR/fork.sh"
 
 if [ ! -f "$FORK_SH" ]; then
-  printf '%s\n' 'Error: fork.sh not found next to test.sh' >&2
-  exit 1
+	printf '%s\n' 'Error: fork.sh not found next to test.sh' >&2
+	exit 1
 fi
 
 if ! command -v git >/dev/null 2>&1; then
-  printf '%s\n' 'Error: git not found on PATH' >&2
-  exit 1
+	printf '%s\n' 'Error: git not found on PATH' >&2
+	exit 1
 fi
 
 if [ "$USE_CACHE" -eq 1 ] && [ "${FORK_TEST_CACHE_PHASE:-0}" -ne 1 ]; then
-  if [ -n "${FORK_TEST_CACHE_PATH:-}" ]; then
-    cache_dir="$FORK_TEST_CACHE_PATH"
-  elif [ -n "${XDG_CACHE_HOME:-}" ]; then
-    cache_dir="$XDG_CACHE_HOME/fork"
-  elif [ -n "${HOME:-}" ]; then
-    cache_dir="$HOME/.cache/fork"
-  else
-    cache_dir="$SCRIPT_DIR/.fork-cache"
-  fi
+	if [ -n "${FORK_TEST_CACHE_PATH:-}" ]; then
+		cache_dir="$FORK_TEST_CACHE_PATH"
+	elif [ -n "${XDG_CACHE_HOME:-}" ]; then
+		cache_dir="$XDG_CACHE_HOME/fork"
+	elif [ -n "${HOME:-}" ]; then
+		cache_dir="$HOME/.cache/fork"
+	else
+		cache_dir="$SCRIPT_DIR/.fork-cache"
+	fi
 
-  fork_hash=$(hash_file "$FORK_SH")
-  test_hash=$(hash_file "$SCRIPT_PATH")
-  cache_key="${fork_hash}_${test_hash}_fast${FAST}"
-  cache_file="$cache_dir/fork_test_cache_${cache_key}"
-  cache_status_file="$cache_file.status"
+	fork_hash=$(hash_file "$FORK_SH")
+	test_hash=$(hash_file "$SCRIPT_PATH")
+	cache_key="${fork_hash}_${test_hash}_fast${FAST}"
+	cache_file="$cache_dir/fork_test_cache_${cache_key}"
+	cache_status_file="$cache_file.status"
 
-  mkdir -p "$cache_dir"
+	mkdir -p "$cache_dir"
 
-  if [ -f "$cache_file" ] && [ -f "$cache_status_file" ]; then
-    cached_status=$(cat "$cache_status_file")
-    if [ "$VERBOSE" -eq 1 ]; then
-      printf '%s\n' "Using cached test results (hash ${cache_key})"
-    else
-      printf '%s\n' "Using cached test results"
-    fi
-    display_results "$cache_file" "$cached_status"
-    exit "$cached_status"
-  fi
+	if [ -f "$cache_file" ] && [ -f "$cache_status_file" ]; then
+		cached_status=$(cat "$cache_status_file")
+		if [ "$VERBOSE" -eq 1 ]; then
+			printf '%s\n' "Using cached test results (hash ${cache_key})"
+		else
+			printf '%s\n' "Using cached test results"
+		fi
+		display_results "$cache_file" "$cached_status"
+		exit "$cached_status"
+	fi
 
-  tmp_prefix="$cache_dir/fork_test_cache_tmp.$$"
-  tmp_cache="$tmp_prefix"
-  suffix=0
-  while :; do
-    if (umask 077 && : >"$tmp_cache") 2>/dev/null; then
-      break
-    fi
-    suffix=$((suffix + 1))
-    tmp_cache="${tmp_prefix}.$suffix"
-    if [ "$suffix" -ge 1000 ]; then
-      printf '%s\n' 'Error: unable to create temporary cache file' >&2
-      exit 1
-    fi
-  done
+	tmp_prefix="$cache_dir/fork_test_cache_tmp.$$"
+	tmp_cache="$tmp_prefix"
+	suffix=0
+	while :; do
+		if (umask 077 && : >"$tmp_cache") 2>/dev/null; then
+			break
+		fi
+		suffix=$((suffix + 1))
+		tmp_cache="${tmp_prefix}.$suffix"
+		if [ "$suffix" -ge 1000 ]; then
+			printf '%s\n' 'Error: unable to create temporary cache file' >&2
+			exit 1
+		fi
+	done
 
-  trap 'rm -f "$tmp_cache"' INT TERM HUP EXIT
-  set +e
-  if [ -n "$ORIG_ARGS" ]; then
-    FORK_TEST_CACHE_PHASE=1 FORK_TEST_CACHE_FORCE_VERBOSE=1 sh "$0" $ORIG_ARGS >"$tmp_cache" 2>&1
-  else
-    FORK_TEST_CACHE_PHASE=1 FORK_TEST_CACHE_FORCE_VERBOSE=1 sh "$0" >"$tmp_cache" 2>&1
-  fi
-  status=$?
-  set -e
-  display_results "$tmp_cache" "$status"
-  mv "$tmp_cache" "$cache_file"
-  printf '%s\n' "$status" >"$cache_status_file"
-  trap - INT TERM HUP EXIT
-  exit "$status"
+	trap 'rm -f "$tmp_cache"' INT TERM HUP EXIT
+	set +e
+	if [ -n "$ORIG_ARGS" ]; then
+		FORK_TEST_CACHE_PHASE=1 FORK_TEST_CACHE_FORCE_VERBOSE=1 sh "$0" $ORIG_ARGS >"$tmp_cache" 2>&1
+	else
+		FORK_TEST_CACHE_PHASE=1 FORK_TEST_CACHE_FORCE_VERBOSE=1 sh "$0" >"$tmp_cache" 2>&1
+	fi
+	status=$?
+	set -e
+	display_results "$tmp_cache" "$status"
+	mv "$tmp_cache" "$cache_file"
+	printf '%s\n' "$status" >"$cache_status_file"
+	trap - INT TERM HUP EXIT
+	exit "$status"
 fi
 
 test_root="${TMPDIR:-/tmp}/fork-test-$$"
@@ -180,199 +180,199 @@ PASS=0
 FAIL=0
 
 print_summary() {
-  printf '%s\n' "---"
-  printf '%s\n' "Passed: $PASS"
-  printf '%s\n' "Failed: $FAIL"
-  if [ "$FAIL" -ne 0 ] && [ -s "$FAIL_LOG" ]; then
-    printf '%s\n' "Failed tests:"
-    while IFS= read -r line; do
-      printf '  - %s\n' "$line"
-    done <"$FAIL_LOG"
-  fi
+	printf '%s\n' "---"
+	printf '%s\n' "Passed: $PASS"
+	printf '%s\n' "Failed: $FAIL"
+	if [ "$FAIL" -ne 0 ] && [ -s "$FAIL_LOG" ]; then
+		printf '%s\n' "Failed tests:"
+		while IFS= read -r line; do
+			printf '  - %s\n' "$line"
+		done <"$FAIL_LOG"
+	fi
 }
 
 die() {
-  desc=$1
-  reason=$2
-  printf '%s\n' "not ok - $desc: $reason" >&2
-  printf '%s\n' "$desc: $reason" >>"$FAIL_LOG"
-  FAIL=$((FAIL + 1))
-  if [ "$FAST" -eq 1 ]; then
-    printf '%s\n' "Fast mode enabled; aborting after first failure." >&2
-    print_summary
-    exit 1
-  fi
+	desc=$1
+	reason=$2
+	printf '%s\n' "not ok - $desc: $reason" >&2
+	printf '%s\n' "$desc: $reason" >>"$FAIL_LOG"
+	FAIL=$((FAIL + 1))
+	if [ "$FAST" -eq 1 ]; then
+		printf '%s\n' "Fast mode enabled; aborting after first failure." >&2
+		print_summary
+		exit 1
+	fi
 }
 
 ok() {
-  if [ "$VERBOSE" -eq 1 ]; then
-    printf '%s\n' "ok - $1"
-  fi
-  PASS=$((PASS + 1))
+	if [ "$VERBOSE" -eq 1 ]; then
+		printf '%s\n' "ok - $1"
+	fi
+	PASS=$((PASS + 1))
 }
 
 run_fork() {
-  (cd "$REPO_DIR" && sh "$FORK_SH" "$@")
+	(cd "$REPO_DIR" && sh "$FORK_SH" "$@")
 }
 
 run_fork_quiet() {
-  tmp_prefix="$test_root/run_fork_quiet.$$"
-  tmp_base="$tmp_prefix"
-  suffix=0
+	tmp_prefix="$test_root/run_fork_quiet.$$"
+	tmp_base="$tmp_prefix"
+	suffix=0
 
-  while :; do
-    out_file="${tmp_base}.out"
-    err_file="${tmp_base}.err"
-    if (umask 077 && : >"$out_file" && : >"$err_file") 2>/dev/null; then
-      break
-    fi
-    suffix=$((suffix + 1))
-    tmp_base="${tmp_prefix}.$suffix"
-    if [ "$suffix" -ge 1000 ]; then
-      printf '%s\n' 'Error: unable to create temporary capture files' >&2
-      exit 1
-    fi
-  done
+	while :; do
+		out_file="${tmp_base}.out"
+		err_file="${tmp_base}.err"
+		if (umask 077 && : >"$out_file" && : >"$err_file") 2>/dev/null; then
+			break
+		fi
+		suffix=$((suffix + 1))
+		tmp_base="${tmp_prefix}.$suffix"
+		if [ "$suffix" -ge 1000 ]; then
+			printf '%s\n' 'Error: unable to create temporary capture files' >&2
+			exit 1
+		fi
+	done
 
-  set +e
-  (cd "$REPO_DIR" && sh "$FORK_SH" "$@" >"$out_file" 2>"$err_file")
-  status=$?
-  set -e
+	set +e
+	(cd "$REPO_DIR" && sh "$FORK_SH" "$@" >"$out_file" 2>"$err_file")
+	status=$?
+	set -e
 
-  if [ "$status" -ne 0 ]; then
-    printf '%s' 'Command failed: fork.sh' >&2
-    for arg in "$@"; do
-      printf ' %s' "$arg" >&2
-    done
-    printf '\n' >&2
+	if [ "$status" -ne 0 ]; then
+		printf '%s' 'Command failed: fork.sh' >&2
+		for arg in "$@"; do
+			printf ' %s' "$arg" >&2
+		done
+		printf '\n' >&2
 
-    if [ -s "$out_file" ]; then
-      printf '%s\n' "-- stdout --" >&2
-      cat "$out_file" >&2
-    fi
+		if [ -s "$out_file" ]; then
+			printf '%s\n' "-- stdout --" >&2
+			cat "$out_file" >&2
+		fi
 
-    if [ -s "$err_file" ]; then
-      printf '%s\n' "-- stderr --" >&2
-      cat "$err_file" >&2
-    fi
-  fi
+		if [ -s "$err_file" ]; then
+			printf '%s\n' "-- stderr --" >&2
+			cat "$err_file" >&2
+		fi
+	fi
 
-  rm -f "$out_file" "$err_file"
-  return "$status"
+	rm -f "$out_file" "$err_file"
+	return "$status"
 }
 
 run_fork_capture() {
-  out_file=$1
-  err_file=$2
-  shift 2
-  (cd "$REPO_DIR" && sh "$FORK_SH" "$@" >"$out_file" 2>"$err_file")
+	out_file=$1
+	err_file=$2
+	shift 2
+	(cd "$REPO_DIR" && sh "$FORK_SH" "$@" >"$out_file" 2>"$err_file")
 }
 
 run_fork_capture_cd() {
-  out_file=$1
-  err_file=$2
-  shift 2
-  (cd "$REPO_DIR" && env FORK_CD=1 sh "$FORK_SH" "$@" >"$out_file" 2>"$err_file")
+	out_file=$1
+	err_file=$2
+	shift 2
+	(cd "$REPO_DIR" && env FORK_CD=1 sh "$FORK_SH" "$@" >"$out_file" 2>"$err_file")
 }
 
 setup_repo() {
-  repo_name=$1
-  REPO_NAME="$repo_name"
-  REPO_DIR="$test_root/$repo_name"
-  WORKTREE_BASE="$test_root/${repo_name}_forks"
+	repo_name=$1
+	REPO_NAME="$repo_name"
+	REPO_DIR="$test_root/$repo_name"
+	WORKTREE_BASE="$test_root/${repo_name}_forks"
 
-  mkdir -p "$REPO_DIR"
-  cd "$REPO_DIR"
-  git init . >/dev/null 2>&1
-  git config user.email "tester@example.com"
-  git config user.name "Fork Tester"
-  echo "initial" >README.md
-  git add README.md
-  git commit -m "Initial commit" >/dev/null 2>&1
-  git branch -M main >/dev/null 2>&1
-  REPO_REALPATH=$(pwd -P)
-  WORKTREE_BASE_REAL="$TEST_ROOT_REAL/${repo_name}_forks"
-  cd "$SCRIPT_DIR"
+	mkdir -p "$REPO_DIR"
+	cd "$REPO_DIR"
+	git init . >/dev/null 2>&1
+	git config user.email "tester@example.com"
+	git config user.name "Fork Tester"
+	echo "initial" >README.md
+	git add README.md
+	git commit -m "Initial commit" >/dev/null 2>&1
+	git branch -M main >/dev/null 2>&1
+	REPO_REALPATH=$(pwd -P)
+	WORKTREE_BASE_REAL="$TEST_ROOT_REAL/${repo_name}_forks"
+	cd "$SCRIPT_DIR"
 }
 
 assert_equal() {
-  expected=$1
-  actual=$2
-  desc=$3
-  if [ "$expected" = "$actual" ]; then
-    ok "$desc"
-  else
-    die "$desc" "expected '$expected' got '$actual'"
-  fi
+	expected=$1
+	actual=$2
+	desc=$3
+	if [ "$expected" = "$actual" ]; then
+		ok "$desc"
+	else
+		die "$desc" "expected '$expected' got '$actual'"
+	fi
 }
 
 assert_dir_exists() {
-  path=$1
-  desc=$2
-  if [ -d "$path" ]; then
-    ok "$desc"
-  else
-    die "$desc" "directory '$path' missing"
-  fi
+	path=$1
+	desc=$2
+	if [ -d "$path" ]; then
+		ok "$desc"
+	else
+		die "$desc" "directory '$path' missing"
+	fi
 }
 
 assert_dir_missing() {
-  path=$1
-  desc=$2
-  if [ ! -d "$path" ]; then
-    ok "$desc"
-  else
-    die "$desc" "directory '$path' still present"
-  fi
+	path=$1
+	desc=$2
+	if [ ! -d "$path" ]; then
+		ok "$desc"
+	else
+		die "$desc" "directory '$path' still present"
+	fi
 }
 
 assert_contains() {
-  needle=$1
-  haystack=$2
-  desc=$3
-  case "$haystack" in
-  *"$needle"*)
-    ok "$desc"
-    ;;
-  *)
-    die "$desc" "missing '$needle' in output"
-    ;;
-  esac
+	needle=$1
+	haystack=$2
+	desc=$3
+	case "$haystack" in
+	*"$needle"*)
+		ok "$desc"
+		;;
+	*)
+		die "$desc" "missing '$needle' in output"
+		;;
+	esac
 }
 
 assert_not_contains() {
-  needle=$1
-  haystack=$2
-  desc=$3
-  case "$haystack" in
-  *"$needle"*)
-    die "$desc" "unexpected '$needle' in output"
-    ;;
-  *)
-    ok "$desc"
-    ;;
-  esac
+	needle=$1
+	haystack=$2
+	desc=$3
+	case "$haystack" in
+	*"$needle"*)
+		die "$desc" "unexpected '$needle' in output"
+		;;
+	*)
+		ok "$desc"
+		;;
+	esac
 }
 
 assert_empty() {
-  value=$1
-  desc=$2
-  if [ -z "$value" ]; then
-    ok "$desc"
-  else
-    die "$desc" "expected empty but got '$value'"
-  fi
+	value=$1
+	desc=$2
+	if [ -z "$value" ]; then
+		ok "$desc"
+	else
+		die "$desc" "expected empty but got '$value'"
+	fi
 }
 
 assert_status() {
-  expected=$1
-  actual=$2
-  desc=$3
-  if [ "$actual" -eq "$expected" ]; then
-    ok "$desc"
-  else
-    die "$desc" "expected status $expected but got $actual"
-  fi
+	expected=$1
+	actual=$2
+	desc=$3
+	if [ "$actual" -eq "$expected" ]; then
+		ok "$desc"
+	else
+		die "$desc" "expected status $expected but got $actual"
+	fi
 }
 
 setup_repo "fork-main"
@@ -469,12 +469,12 @@ assert_contains "fork()" "$bash_integration" "sh bash emits shell function"
 
 setup_repo "fork-target"
 (
-  cd "$REPO_DIR" &&
-    git checkout -b develop >/dev/null 2>&1 &&
-    echo "develop base" >develop.txt &&
-    git add develop.txt &&
-    git commit -m "Seed develop" >/dev/null 2>&1 &&
-    git checkout main >/dev/null 2>&1
+	cd "$REPO_DIR" &&
+		git checkout -b develop >/dev/null 2>&1 &&
+		echo "develop base" >develop.txt &&
+		git add develop.txt &&
+		git commit -m "Seed develop" >/dev/null 2>&1 &&
+		git checkout main >/dev/null 2>&1
 )
 run_fork_quiet new --target develop feature-one feature-two
 assert_dir_exists "$WORKTREE_BASE_REAL/feature-one" "new --target creates feature-one worktree"
@@ -489,10 +489,10 @@ setup_repo "fork-ls"
 run_fork_quiet new feature-merged
 run_fork_quiet new feature-unmerged
 (
-  cd "$WORKTREE_BASE_REAL/feature-unmerged" &&
-    echo "change" >work.txt &&
-    git add work.txt &&
-    git commit -m "WIP change" >/dev/null 2>&1
+	cd "$WORKTREE_BASE_REAL/feature-unmerged" &&
+		echo "change" >work.txt &&
+		git add work.txt &&
+		git commit -m "WIP change" >/dev/null 2>&1
 )
 ls_merged=$(run_fork ls -m)
 ls_unmerged=$(run_fork ls -u)
@@ -507,8 +507,8 @@ assert_contains "clean" "$ls_all" "ls shows dirty status"
 
 run_fork_quiet new feature-dirty
 (
-  cd "$WORKTREE_BASE_REAL/feature-dirty" &&
-    echo "dirty" >dirty.txt
+	cd "$WORKTREE_BASE_REAL/feature-dirty" &&
+		echo "dirty" >dirty.txt
 )
 ls_dirty=$(run_fork ls -d)
 ls_clean=$(run_fork ls -c)
@@ -555,16 +555,16 @@ run_fork_quiet new feature-current
 run_fork_quiet new feature-other
 run_fork_quiet new feature-keep
 (
-  cd "$WORKTREE_BASE_REAL/feature-keep" &&
-    echo "keep" >keep.txt &&
-    git add keep.txt &&
-    git commit -m "Keep changes" >/dev/null 2>&1
+	cd "$WORKTREE_BASE_REAL/feature-keep" &&
+		echo "keep" >keep.txt &&
+		git add keep.txt &&
+		git commit -m "Keep changes" >/dev/null 2>&1
 )
 clean_current_stdout="$test_root/clean_current.out"
 clean_current_stderr="$test_root/clean_current.err"
 (
-  cd "$WORKTREE_BASE_REAL/feature-current" &&
-    env FORK_CD=1 sh "$FORK_SH" clean >"$clean_current_stdout" 2>"$clean_current_stderr"
+	cd "$WORKTREE_BASE_REAL/feature-current" &&
+		env FORK_CD=1 sh "$FORK_SH" clean >"$clean_current_stdout" 2>"$clean_current_stderr"
 )
 clean_current_out=$(cat "$clean_current_stdout")
 clean_current_err=$(cat "$clean_current_stderr")
@@ -598,10 +598,10 @@ assert_status 1 "$missing_rm_status" "rm exits non-zero for missing worktree"
 assert_contains "does not exist" "$missing_rm_err" "rm missing emits helpful error"
 run_fork_quiet new stubborn
 (
-  cd "$WORKTREE_BASE_REAL/stubborn" &&
-    echo "pending" >pending.txt &&
-    git add pending.txt &&
-    git commit -m "Pending work" >/dev/null 2>&1
+	cd "$WORKTREE_BASE_REAL/stubborn" &&
+		echo "pending" >pending.txt &&
+		git add pending.txt &&
+		git commit -m "Pending work" >/dev/null 2>&1
 )
 unmerged_rm_stdout="$test_root/rm_unmerged.out"
 unmerged_rm_stderr="$test_root/rm_unmerged.err"
@@ -629,9 +629,9 @@ assert_dir_missing "$WORKTREE_BASE_REAL/aux" "rm -a -f removes auxiliary worktre
 setup_repo "fork-dirty"
 run_fork_quiet new dirty-staged
 (
-  cd "$WORKTREE_BASE_REAL/dirty-staged" &&
-    echo "staged" >staged.txt &&
-    git add staged.txt
+	cd "$WORKTREE_BASE_REAL/dirty-staged" &&
+		echo "staged" >staged.txt &&
+		git add staged.txt
 )
 dirty_staged_rm_stdout="$test_root/dirty_staged_rm.out"
 dirty_staged_rm_stderr="$test_root/dirty_staged_rm.err"
@@ -646,8 +646,8 @@ assert_dir_exists "$WORKTREE_BASE_REAL/dirty-staged" "rm without force leaves di
 
 run_fork_quiet new dirty-unstaged
 (
-  cd "$WORKTREE_BASE_REAL/dirty-unstaged" &&
-    echo "modified" >README.md
+	cd "$WORKTREE_BASE_REAL/dirty-unstaged" &&
+		echo "modified" >README.md
 )
 dirty_unstaged_rm_stdout="$test_root/dirty_unstaged_rm.out"
 dirty_unstaged_rm_stderr="$test_root/dirty_unstaged_rm.err"
@@ -662,8 +662,8 @@ assert_dir_exists "$WORKTREE_BASE_REAL/dirty-unstaged" "rm without force leaves 
 
 run_fork_quiet new dirty-untracked
 (
-  cd "$WORKTREE_BASE_REAL/dirty-untracked" &&
-    echo "untracked" >untracked.txt
+	cd "$WORKTREE_BASE_REAL/dirty-untracked" &&
+		echo "untracked" >untracked.txt
 )
 dirty_untracked_rm_stdout="$test_root/dirty_untracked_rm.out"
 dirty_untracked_rm_stderr="$test_root/dirty_untracked_rm.err"
@@ -694,13 +694,13 @@ run_fork_quiet new clean-dirty-staged
 run_fork_quiet new clean-dirty-untracked
 run_fork_quiet new clean-normal
 (
-  cd "$WORKTREE_BASE_REAL/clean-dirty-staged" &&
-    echo "staged" >staged.txt &&
-    git add staged.txt
+	cd "$WORKTREE_BASE_REAL/clean-dirty-staged" &&
+		echo "staged" >staged.txt &&
+		git add staged.txt
 )
 (
-  cd "$WORKTREE_BASE_REAL/clean-dirty-untracked" &&
-    echo "untracked" >untracked.txt
+	cd "$WORKTREE_BASE_REAL/clean-dirty-untracked" &&
+		echo "untracked" >untracked.txt
 )
 clean_skip_dirty_stdout="$test_root/clean_skip_dirty.out"
 clean_skip_dirty_stderr="$test_root/clean_skip_dirty.err"
@@ -740,7 +740,7 @@ assert_empty "$help_verbose_out" "help --verbose prints nothing to stdout"
 sh_detect_stdout="$test_root/sh_detect.out"
 sh_detect_stderr="$test_root/sh_detect.err"
 (
-  cd "$REPO_DIR" && env SHELL=/bin/bash sh "$FORK_SH" sh >"$sh_detect_stdout" 2>"$sh_detect_stderr"
+	cd "$REPO_DIR" && env SHELL=/bin/bash sh "$FORK_SH" sh >"$sh_detect_stdout" 2>"$sh_detect_stderr"
 )
 sh_detect_status=$?
 sh_detect_out=$(cat "$sh_detect_stdout")
@@ -752,7 +752,7 @@ sh_unknown_stdout="$test_root/sh_unknown.out"
 sh_unknown_stderr="$test_root/sh_unknown.err"
 set +e
 (
-  cd "$REPO_DIR" && env SHELL=/bin/unknown sh "$FORK_SH" sh >"$sh_unknown_stdout" 2>"$sh_unknown_stderr"
+	cd "$REPO_DIR" && env SHELL=/bin/unknown sh "$FORK_SH" sh >"$sh_unknown_stdout" 2>"$sh_unknown_stderr"
 )
 sh_unknown_status=$?
 set -e
@@ -816,6 +816,150 @@ env_cd_stderr="$test_root/env_cd.err"
 (cd "$REPO_DIR" && env FORK_ENV="$env_file" FORK_CD=1 sh "$FORK_SH" ls >"$env_cd_stdout" 2>"$env_cd_stderr")
 env_cd_err=$(cat "$env_cd_stderr")
 assert_empty "$env_cd_err" "cd mode suppresses config message"
+
+setup_repo "fork-container-flags"
+run_fork_quiet new feature-container
+container_co_stdout="$test_root/container_co.out"
+container_co_stderr="$test_root/container_co.err"
+set +e
+run_fork_capture_cd "$container_co_stdout" "$container_co_stderr" co feature-container -c
+container_co_status=$?
+set -e
+container_co_out=$(cat "$container_co_stdout")
+container_co_err=$(cat "$container_co_stderr")
+assert_status 0 "$container_co_status" "fork co -c flag accepted"
+assert_contains "FORK_CONTAINER_EXEC=1" "$container_co_out" "fork co -c outputs container exec command"
+assert_contains "run --rm -it" "$container_co_out" "fork co -c uses --rm flag by default"
+container_go_stdout="$test_root/container_go.out"
+container_go_stderr="$test_root/container_go.err"
+set +e
+run_fork_capture_cd "$container_go_stdout" "$container_go_stderr" go feature-container-go -c
+container_go_status=$?
+set -e
+container_go_out=$(cat "$container_go_stdout")
+container_go_err=$(cat "$container_go_stderr")
+assert_status 0 "$container_go_status" "fork go -c flag accepted"
+assert_contains "FORK_CONTAINER_EXEC=1" "$container_go_out" "fork go -c outputs container exec command"
+assert_contains "run --rm -it" "$container_go_out" "fork go -c uses --rm flag by default"
+
+setup_repo "fork-container-env"
+container_env_file="$REPO_DIR/.fork-container.env"
+cat >"$container_env_file" <<'EOF'
+FORK_CONTAINER=1
+FORK_CONTAINER_IMAGE=alpine:latest
+FORK_CONTAINER_NAME=test
+FORK_CONTAINER_RUNTIME=docker
+EOF
+run_fork_quiet new feature-env-container
+container_env_stdout="$test_root/container_env.out"
+container_env_stderr="$test_root/container_env.err"
+set +e
+(cd "$REPO_DIR" && env FORK_ENV="$container_env_file" FORK_CD=1 sh "$FORK_SH" co feature-env-container >"$container_env_stdout" 2>"$container_env_stderr")
+container_env_status=$?
+set -e
+container_env_out=$(cat "$container_env_stdout")
+container_env_err=$(cat "$container_env_stderr")
+assert_status 0 "$container_env_status" "fork co respects FORK_CONTAINER env var"
+assert_contains "FORK_CONTAINER_EXEC=1" "$container_env_out" "fork uses container mode when FORK_CONTAINER=1"
+assert_contains "alpine:latest" "$container_env_out" "fork uses FORK_CONTAINER_IMAGE"
+assert_contains "docker" "$container_env_out" "fork uses FORK_CONTAINER_RUNTIME"
+
+setup_repo "fork-container-keep-alive"
+container_keep_file="$REPO_DIR/.fork-keep.env"
+cat >"$container_keep_file" <<'EOF'
+FORK_CONTAINER=1
+FORK_CONTAINER_KEEP_ALIVE=1
+EOF
+run_fork_quiet new feature-keep-alive
+container_keep_stdout="$test_root/container_keep.out"
+container_keep_stderr="$test_root/container_keep.err"
+set +e
+(cd "$REPO_DIR" && env FORK_ENV="$container_keep_file" FORK_CD=1 sh "$FORK_SH" co feature-keep-alive >"$container_keep_stdout" 2>"$container_keep_stderr")
+container_keep_status=$?
+set -e
+container_keep_out=$(cat "$container_keep_stdout")
+container_keep_err=$(cat "$container_keep_stderr")
+assert_status 0 "$container_keep_status" "fork co respects FORK_CONTAINER_KEEP_ALIVE"
+assert_contains "FORK_CONTAINER_EXEC=1" "$container_keep_out" "fork uses container mode"
+assert_contains "exec -it" "$container_keep_out" "fork uses exec mode when FORK_CONTAINER_KEEP_ALIVE=1"
+assert_not_contains "run --rm" "$container_keep_out" "fork does not use --rm when FORK_CONTAINER_KEEP_ALIVE=1"
+
+setup_repo "fork-container-runtime"
+podman_env_file="$REPO_DIR/.fork-podman.env"
+cat >"$podman_env_file" <<'EOF'
+FORK_CONTAINER=1
+FORK_CONTAINER_RUNTIME=podman
+EOF
+run_fork_quiet new feature-podman
+podman_stdout="$test_root/podman.out"
+podman_stderr="$test_root/podman.err"
+set +e
+(cd "$REPO_DIR" && env FORK_ENV="$podman_env_file" FORK_CD=1 sh "$FORK_SH" co feature-podman >"$podman_stdout" 2>"$podman_stderr")
+podman_status=$?
+set -e
+podman_out=$(cat "$podman_stdout")
+podman_err=$(cat "$podman_stderr")
+assert_status 0 "$podman_status" "fork co respects FORK_CONTAINER_RUNTIME=podman"
+assert_contains "podman run" "$podman_out" "fork uses podman when FORK_CONTAINER_RUNTIME=podman"
+
+setup_repo "fork-container-mount"
+run_fork_quiet new feature-mount
+container_mount_stdout="$test_root/container_mount.out"
+container_mount_stderr="$test_root/container_mount.err"
+set +e
+run_fork_capture_cd "$container_mount_stdout" "$container_mount_stderr" co feature-mount -c
+container_mount_status=$?
+set -e
+container_mount_out=$(cat "$container_mount_stdout")
+repo_name=$(basename "$REPO_DIR")
+assert_status 0 "$container_mount_status" "fork co -c succeeds"
+assert_contains ":/$repo_name:" "$container_mount_out" "fork mounts to /repo_name in container"
+assert_contains "-w /$repo_name" "$container_mount_out" "fork sets working directory to /repo_name"
+
+setup_repo "fork-container-flag-k"
+run_fork_quiet new feature-flag-k
+k_flag_stdout="$test_root/k_flag.out"
+k_flag_stderr="$test_root/k_flag.err"
+set +e
+run_fork_capture_cd "$k_flag_stdout" "$k_flag_stderr" co feature-flag-k -c -k
+k_flag_status=$?
+set -e
+k_flag_out=$(cat "$k_flag_stdout")
+assert_status 0 "$k_flag_status" "fork co -c -k succeeds"
+assert_contains "FORK_CONTAINER_EXEC=1" "$k_flag_out" "fork co -c -k uses container mode"
+assert_contains "exec -it" "$k_flag_out" "fork co -c -k uses exec when -k flag set"
+assert_not_contains "run --rm" "$k_flag_out" "fork co -c -k does not use --rm when -k flag set"
+
+setup_repo "fork-container-flag-k-go"
+k_go_flag_stdout="$test_root/k_go_flag.out"
+k_go_flag_stderr="$test_root/k_go_flag.err"
+set +e
+run_fork_capture_cd "$k_go_flag_stdout" "$k_go_flag_stderr" go feature-flag-k-go -c -k
+k_go_flag_status=$?
+set -e
+k_go_flag_out=$(cat "$k_go_flag_stdout")
+assert_status 0 "$k_go_flag_status" "fork go -c -k succeeds"
+assert_contains "FORK_CONTAINER_EXEC=1" "$k_go_flag_out" "fork go -c -k uses container mode"
+assert_contains "exec -it" "$k_go_flag_out" "fork go -c -k uses exec when -k flag set"
+assert_not_contains "run --rm" "$k_go_flag_out" "fork go -c -k does not use --rm when -k flag set"
+
+setup_repo "fork-container-flag-k-override"
+k_override_env_file="$REPO_DIR/.fork-k-override.env"
+cat >"$k_override_env_file" <<'EOF'
+FORK_CONTAINER=1
+FORK_CONTAINER_KEEP_ALIVE=0
+EOF
+run_fork_quiet new feature-k-override
+k_override_stdout="$test_root/k_override.out"
+k_override_stderr="$test_root/k_override.err"
+set +e
+(cd "$REPO_DIR" && env FORK_ENV="$k_override_env_file" FORK_CD=1 sh "$FORK_SH" co feature-k-override -k >"$k_override_stdout" 2>"$k_override_stderr")
+k_override_status=$?
+set -e
+k_override_out=$(cat "$k_override_stdout")
+assert_status 0 "$k_override_status" "fork co -k overrides FORK_CONTAINER_KEEP_ALIVE=0"
+assert_contains "exec -it" "$k_override_out" "fork co -k uses exec mode despite env var"
+assert_not_contains "run --rm" "$k_override_out" "fork co -k does not use --rm despite env var"
 
 print_summary
 
