@@ -77,40 +77,42 @@ load_env_file
 # Exits:
 #   2 always (after displaying help)
 usage() {
-  verbose=0
-  [ "${1-}" = "-v" ] || [ "${1-}" = "--verbose" ] && verbose=1
+	verbose=0
+	[ "${1-}" = "-v" ] || [ "${1-}" = "--verbose" ] && verbose=1
 
-  if [ $verbose -eq 0 ]; then
-    # Detect shell from $SHELL
-    shell_integration=""
-    case "${SHELL-}" in
-    */zsh)
-      shell_integration='eval "$(fork sh zsh)"   # Add to ~/.zshrc'
-      ;;
-    */bash)
-      shell_integration='eval "$(fork sh bash)"   # Add to ~/.bashrc'
-      ;;
-    */fish)
-      shell_integration='fork sh fish | source   # Add to ~/.config/fish/config.fish'
-      ;;
-    *)
-      # Unknown or empty shell - show all options
-      shell_integration='Bash/Zsh: eval "$(fork sh bash)"   # Add to ~/.bashrc or ~/.zshrc
+	if [ $verbose -eq 0 ]; then
+		# Detect shell from $SHELL
+		shell_integration=""
+		case "${SHELL-}" in
+		*/zsh)
+			shell_integration='eval "$(fork sh zsh)"   # Add to ~/.zshrc'
+			;;
+		*/bash)
+			shell_integration='eval "$(fork sh bash)"   # Add to ~/.bashrc'
+			;;
+		*/fish)
+			shell_integration='fork sh fish | source   # Add to ~/.config/fish/config.fish'
+			;;
+		*)
+			# Unknown or empty shell - show all options
+			shell_integration='Bash/Zsh: eval "$(fork sh bash)"   # Add to ~/.bashrc or ~/.zshrc
   Fish:     fork sh fish | source   # Add to ~/.config/fish/config.fish'
-      ;;
-    esac
+			;;
+		esac
 
-    cat >&2 <<EOF
+		cat >&2 <<EOF
 fork - Manage git worktrees like a forking boss
 
 Usage: fork <command> [args]
 
 Commands:
   new <branch>... [-t|--target <base>]    Create worktrees
-  co <branch>                             Change to worktree
+  co <branch> [-c|--container]            Change to worktree
   go <branch> [-t|--target <base>]        Change to worktree (create if needed)
+              [-c|--container]
   main                                    Go to main worktree
   rm [branch...] [-f|--force] [-a|--all]  Remove worktree(s)
+                 [-c|--container]
   ls [<filters...>]                       List worktrees
                       [-m|--merged] 
                       [-u|--unmerged]
@@ -132,22 +134,26 @@ Configuration:
   
   Only FORK_* prefixed variables are loaded. Example config file:
     FORK_DIR_PATTERN=../{repo}_forks/{branch}
-    FORK_DEBUG=1
+    FORK_CONTAINER=1
+    FORK_CONTAINER_IMAGE=ubuntu:latest
+    FORK_CONTAINER_NAME=myproject
 
 Examples:
   fork new feature-x
   fork go feature-x
+  fork go feature-x -c              Open in container
   fork main
   fork ls
   fork rm feature-x
+  fork rm feature-x -c              Remove worktree and container
   fork rm -a
   fork clean
 
 Run 'fork help --verbose' for detailed documentation.
 EOF
-  else
-    # Verbose help always shows all shell options
-    cat >&2 <<'EOF'
+	else
+		# Verbose help always shows all shell options
+		cat >&2 <<'EOF'
 fork - Manage git worktrees like a forking boss
 
 Usage: fork <command> [args]
@@ -159,20 +165,25 @@ Commands:
       otherwise creates a new local branch.
       -t, --target <base>  Create from <base> instead of main
 
-  co <branch>
+  co <branch> [-c|--container]
       Print path to worktree. Use: cd \$(fork co <branch>)
+      With -c, opens an interactive shell in a container for isolated work.
+      -c, --container  Open worktree in container
 
-  go <branch> [-t|--target <base>]
+  go <branch> [-t|--target <base>] [-c|--container]
       Go to worktree (create if doesn't exist). Same options as 'new'.
+      With -c, opens an interactive shell in a container for isolated work.
+      -c, --container  Open worktree in container
 
   main
       Go to main/primary worktree.
 
-  rm [branch...] [-f] [-a|--all]
+  rm [branch...] [-f] [-a|--all] [-c|--container]
       Remove worktree(s). Defaults to current. Use -a for all.
       Worktrees are protected if unmerged or dirty (uncommitted/untracked changes).
-      -f, --force Force removal of unmerged or dirty branches
-      -a, --all   Remove all worktrees
+      -f, --force     Force removal of unmerged or dirty branches
+      -a, --all       Remove all worktrees
+      -c, --container Also remove associated containers
 
   ls [-m|--merged] [-u|--unmerged] [-d|--dirty] [-c|--clean]
       List worktrees. Default: all. Output: <branch> <merge_status> <dirty_status> <path>
@@ -194,6 +205,7 @@ Commands:
 Convention:
   Worktrees: ../<repo>_forks/<branch>
   Example: myapp_forks/feature-x
+  Containers: {prefix}_{branch}_fork or {branch}_fork (if no prefix)
 
 Shell Integration (required for cd-ing):
   Bash:  eval "$(fork sh bash)"   # Add to ~/.bashrc
@@ -208,24 +220,41 @@ Configuration:
   Lines starting with # are treated as comments. Example:
     # Fork configuration
     FORK_DIR_PATTERN=../{repo}_forks/{branch}
-    FORK_DEBUG=1
+    FORK_CONTAINER=1
+    FORK_CONTAINER_IMAGE=ubuntu:latest
+    FORK_CONTAINER_NAME=myproject
   
   When using shell integration (fork sh), env vars are automatically
   embedded in the generated function and passed to every fork invocation.
 
 Environment Variables:
-  FORK_ENV          Path to configuration file (optional)
-  FORK_CD           Internal flag for shell integration (do not set manually)
-  FORK_DIR_PATTERN  Example config variable (displays on startup if set)
+  FORK_ENV              Path to configuration file (optional)
+  FORK_CD               Internal flag for shell integration (do not set manually)
+  FORK_DIR_PATTERN      Example config variable (displays on startup if set)
+  FORK_CONTAINER        Set to 1 to enable container mode by default
+  FORK_CONTAINER_IMAGE  Container image to use (default: ubuntu:latest)
+  FORK_CONTAINER_NAME   Container name prefix (default: none)
+
+Container Mode:
+  Container mode creates isolated Docker containers for each fork, mounting
+  only the worktree directory. This provides isolation from the host system.
+  
+  Requirements: Docker must be installed and running.
+  
+  Container naming: {FORK_CONTAINER_NAME}_{branch}_fork or {branch}_fork
+  Mount point: /workspace (read-write access to worktree only)
 
 Examples:
   fork new feature-x                   Create worktree for feature-x
   fork new feat-a feat-b               Create multiple worktrees
   fork new bugfix --target develop     Create from develop branch
   fork go feature-x                    Go to feature-x (create if needed)
+  fork go feature-x -c                 Go to feature-x in container
+  fork co feature-x -c                 Open existing worktree in container
   fork main                            Go to main worktree
   fork rm                              Remove current worktree
   fork rm feature-x                    Remove specific worktree
+  fork rm feature-x -c                 Remove worktree and container
   fork rm feat-a feat-b                Remove multiple worktrees
   fork rm -a                           Remove all worktrees
   fork ls                              List all worktrees
@@ -237,8 +266,8 @@ Examples:
   fork sh                              Output shell integration (auto-detect from $SHELL)
   fork sh bash                         Output shell integration for bash/zsh
 EOF
-  fi
-  exit 2
+	fi
+	exit 2
 }
 
 # Check if a command exists in PATH
@@ -311,6 +340,156 @@ get_worktree_base() {
 get_worktree_path() {
   branch="$1"
   printf '%s\n' "$(get_worktree_base)/$branch"
+}
+
+# Check if container runtime (Docker) is available
+# Returns:
+#   0 if Docker is available, 1 otherwise
+container_runtime_available() {
+	command -v docker >/dev/null 2>&1
+}
+
+# Get the container image to use
+# Globals:
+#   FORK_CONTAINER_IMAGE - User-specified image
+# Outputs:
+#   Image name to stdout
+# Returns:
+#   0 always
+get_container_image() {
+	printf '%s' "${FORK_CONTAINER_IMAGE:-ubuntu:latest}"
+}
+
+# Get the container name for a fork
+# Arguments:
+#   $1 - Branch/fork name
+# Globals:
+#   FORK_CONTAINER_NAME - User-specified container name prefix
+# Outputs:
+#   Container name to stdout
+# Returns:
+#   0 always
+get_container_name() {
+	branch="$1"
+	if [ -n "${FORK_CONTAINER_NAME:-}" ]; then
+		printf '%s_%s_fork' "$FORK_CONTAINER_NAME" "$branch"
+	else
+		printf '%s_fork' "$branch"
+	fi
+}
+
+# Check if container exists
+# Arguments:
+#   $1 - Container name
+# Returns:
+#   0 if container exists, 1 otherwise
+container_exists() {
+	container_name="$1"
+	docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"
+}
+
+# Check if container is running
+# Arguments:
+#   $1 - Container name
+# Returns:
+#   0 if container is running, 1 otherwise
+container_is_running() {
+	container_name="$1"
+	docker ps --format '{{.Names}}' | grep -q "^${container_name}$"
+}
+
+# Create and start a container for a fork
+# Arguments:
+#   $1 - Branch/fork name
+#   $2 - Worktree path
+# Outputs:
+#   Status messages to stderr
+# Returns:
+#   0 on success, 1 on failure
+create_container() {
+	branch="$1"
+	worktree_path="$2"
+	container_name="$(get_container_name "$branch")"
+	image="$(get_container_image)"
+
+	if ! container_runtime_available; then
+		printf '%s\n' 'Error: Docker is not available. Please install Docker.' >&2
+		return 1
+	fi
+
+	if container_exists "$container_name"; then
+		if container_is_running "$container_name"; then
+			return 0
+		else
+			docker start "$container_name" >/dev/null 2>&1 || {
+				printf '%s\n' "Error: failed to start existing container: $container_name" >&2
+				return 1
+			}
+			return 0
+		fi
+	fi
+
+	worktree_path_abs="$(cd "$worktree_path" && pwd)"
+
+	docker run -d \
+		--name "$container_name" \
+		-v "$worktree_path_abs:/workspace:rw" \
+		-w /workspace \
+		--entrypoint /bin/sh \
+		"$image" \
+		-c "while true; do sleep 3600; done" >/dev/null 2>&1 || {
+		printf '%s\n' "Error: failed to create container: $container_name" >&2
+		return 1
+	}
+
+	if [ "${FORK_CD:-0}" != "1" ]; then
+		printf '%s\n' "Created container: $container_name" >&2
+	fi
+
+	return 0
+}
+
+# Remove a container for a fork
+# Arguments:
+#   $1 - Branch/fork name
+# Outputs:
+#   Status messages to stderr
+# Returns:
+#   0 on success, 1 on failure
+remove_container() {
+	branch="$1"
+	container_name="$(get_container_name "$branch")"
+
+	if ! container_runtime_available; then
+		return 0
+	fi
+
+	if ! container_exists "$container_name"; then
+		return 0
+	fi
+
+	docker rm -f "$container_name" >/dev/null 2>&1 || {
+		printf '%s\n' "Warning: failed to remove container: $container_name" >&2
+		return 1
+	}
+
+	if [ "${FORK_CD:-0}" != "1" ]; then
+		printf '%s\n' "Removed container: $container_name" >&2
+	fi
+
+	return 0
+}
+
+# Get the command to enter a container
+# Arguments:
+#   $1 - Container name
+# Outputs:
+#   Command string to stdout
+# Returns:
+#   0 always
+get_container_exec_command() {
+	container_name="$1"
+	printf 'docker exec -it %s /bin/sh' "$container_name"
 }
 
 # Check if a local branch exists
@@ -472,74 +651,120 @@ remove_single_worktree() {
 # Exits:
 #   1 on error (invalid arguments or creation failure)
 cmd_new() {
-  base_branch="main"
-  branches=""
+	base_branch="main"
+	branches=""
 
-  while [ $# -gt 0 ]; do
-    case "$1" in
-    -t | --target)
-      shift
-      [ $# -gt 0 ] || {
-        printf '%s\n' 'Error: -t|--target requires a branch argument' >&2
-        exit 1
-      }
-      base_branch="$1"
-      shift
-      ;;
-    -*)
-      printf '%s\n' "Error: unknown option: $1" >&2
-      exit 1
-      ;;
-    *)
-      branches="$branches $1"
-      shift
-      ;;
-    esac
-  done
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		-t | --target)
+			shift
+			[ $# -gt 0 ] || {
+				printf '%s\n' 'Error: -t|--target requires a branch argument' >&2
+				exit 1
+			}
+			base_branch="$1"
+			shift
+			;;
+		-*)
+			printf '%s\n' "Error: unknown option: $1" >&2
+			exit 1
+			;;
+		*)
+			branches="$branches $1"
+			shift
+			;;
+		esac
+	done
 
-  [ -n "$branches" ] || {
-    printf '%s\n' 'Usage: fork new <branch>... [-t|--target <base>]' >&2
-    exit 1
-  }
+	[ -n "$branches" ] || {
+		printf '%s\n' 'Usage: fork new <branch>... [-t|--target <base>]' >&2
+		exit 1
+	}
 
-  for branch in $branches; do
-    create_single_worktree "$branch" "$base_branch"
-  done
+	for branch in $branches; do
+		create_single_worktree "$branch" "$base_branch"
+	done
 }
 
 # Command: Change to worktree (checkout)
 # Prints path to existing worktree for shell integration to cd into
 # Arguments:
 #   $1 - Branch name
+#   -c|--container - Use container mode
 # Outputs:
-#   Worktree path to stdout
+#   Worktree path to stdout (or container exec command if -c flag set)
 #   Status message to stderr (unless FORK_CD=1)
 # Globals:
 #   FORK_CD - Set to 1 when called from shell integration
 #   FORK_LAST - Exports previous directory when FORK_CD=1
+#   FORK_CONTAINER - Set to 1 to enable container mode
 # Exits:
 #   1 if worktree doesn't exist or invalid arguments
 cmd_co() {
-  if [ $# -ne 1 ]; then
-    printf '%s\n' 'Usage: fork co <branch>' >&2
-    exit 1
-  fi
+	use_container="${FORK_CONTAINER:-0}"
 
-  branch="$1"
-  path="$(get_worktree_path "$branch")"
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		-c | --container)
+			use_container=1
+			shift
+			;;
+		-*)
+			printf '%s\n' "Error: unknown option: $1" >&2
+			exit 1
+			;;
+		*)
+			break
+			;;
+		esac
+	done
 
-  if ! worktree_exists "$branch"; then
-    printf '%s\n' "Error: worktree for '$branch' does not exist" >&2
-    exit 1
-  fi
+	if [ $# -ne 1 ]; then
+		printf '%s\n' 'Usage: fork co <branch> [-c|--container]' >&2
+		exit 1
+	fi
 
-  printf '%s\n' "$path"
+	branch="$1"
+	path="$(get_worktree_path "$branch")"
 
-  if [ "${FORK_CD:-0}" = "1" ]; then
-    export FORK_LAST="$(pwd)"
-  else
-    printf '%s\n' "Switched to worktree '$branch'" >&2
-  fi
+	if ! worktree_exists "$branch"; then
+		printf '%s\n' "Error: worktree for '$branch' does not exist" >&2
+		exit 1
+	fi
+
+	if [ "$use_container" = "1" ]; then
+		export FORK_CONTAINER_EXEC=1
+		container_name="$(get_container_name "$branch")"
+
+		if ! container_exists "$container_name"; then
+			if [ "${FORK_CD:-0}" != "1" ]; then
+				printf '%s\n' "Container does not exist for '$branch', creating..." >&2
+			fi
+			create_container "$branch" "$path" || exit 1
+		elif ! container_is_running "$container_name"; then
+			if [ "${FORK_CD:-0}" != "1" ]; then
+				printf '%s\n' "Starting container for '$branch'..." >&2
+			fi
+			docker start "$container_name" >/dev/null 2>&1 || {
+				printf '%s\n' "Error: failed to start container: $container_name" >&2
+				exit 1
+			}
+		fi
+
+		printf '%s' "$(get_container_exec_command "$container_name")"
+	else
+		printf '%s\n' "$path"
+	fi
+
+	if [ "${FORK_CD:-0}" = "1" ]; then
+		export FORK_LAST="$(pwd)"
+	else
+		if [ "$use_container" = "1" ]; then
+			printf '%s\n' "Switched to container for worktree '$branch'" >&2
+		else
+			printf '%s\n' "Switched to worktree '$branch'" >&2
+		fi
+	fi
 }
 
 # Command: Go to main worktree
@@ -553,30 +778,30 @@ cmd_co() {
 #   0 on success
 cmd_main() {
 
-  repo_root="$(get_repo_root)"
-  git_dir="$(cd "$repo_root" && git rev-parse --git-dir)"
+	repo_root="$(get_repo_root)"
+	git_dir="$(cd "$repo_root" && git rev-parse --git-dir)"
 
-  if [ "$git_dir" = ".git" ]; then
-    printf '%s\n' "$repo_root"
+	if [ "$git_dir" = ".git" ]; then
+		printf '%s\n' "$repo_root"
 
-    if [ "${FORK_CD:-0}" != "1" ]; then
-      printf '%s\n' "Switched to main worktree" >&2
-    fi
-  else
-    worktree_list="$(git worktree list --porcelain)"
-    main_worktree="$(printf '%s\n' "$worktree_list" | awk '
+		if [ "${FORK_CD:-0}" != "1" ]; then
+			printf '%s\n' "Switched to main worktree" >&2
+		fi
+	else
+		worktree_list="$(git worktree list --porcelain)"
+		main_worktree="$(printf '%s\n' "$worktree_list" | awk '
 			/^worktree / { path = substr($0, 10); getline; if ($0 !~ /^branch /) print path; exit }
 		')"
-    if [ -n "$main_worktree" ]; then
-      printf '%s\n' "$main_worktree"
-    else
-      printf '%s\n' "$repo_root"
-    fi
+		if [ -n "$main_worktree" ]; then
+			printf '%s\n' "$main_worktree"
+		else
+			printf '%s\n' "$repo_root"
+		fi
 
-    if [ "${FORK_CD:-0}" != "1" ]; then
-      printf '%s\n' "Switched to main worktree" >&2
-    fi
-  fi
+		if [ "${FORK_CD:-0}" != "1" ]; then
+			printf '%s\n' "Switched to main worktree" >&2
+		fi
+	fi
 }
 
 # Command: Go to worktree (create if needed)
@@ -584,60 +809,97 @@ cmd_main() {
 # Arguments:
 #   $1 - Branch name
 #   -t|--target <base> - Base branch to create from if needed (optional)
+#   -c|--container - Use container mode
 # Outputs:
-#   Worktree path to stdout
+#   Worktree path to stdout (or container exec command if -c flag set)
 #   Status messages to stderr
 # Globals:
 #   FORK_CD - Set to 1 when called from shell integration
+#   FORK_CONTAINER - Set to 1 to enable container mode
 # Exits:
 #   1 on error (invalid arguments or creation failure)
 cmd_go() {
-  base_branch="main"
+	base_branch="main"
+	use_container="${FORK_CONTAINER:-0}"
 
-  while [ $# -gt 0 ]; do
-    case "$1" in
-    -t | --target)
-      shift
-      [ $# -gt 0 ] || {
-        printf '%s\n' 'Error: -t|--target requires a branch argument' >&2
-        exit 1
-      }
-      base_branch="$1"
-      shift
-      ;;
-    -*)
-      printf '%s\n' "Error: unknown option: $1" >&2
-      exit 1
-      ;;
-    *)
-      break
-      ;;
-    esac
-  done
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		-t | --target)
+			shift
+			[ $# -gt 0 ] || {
+				printf '%s\n' 'Error: -t|--target requires a branch argument' >&2
+				exit 1
+			}
+			base_branch="$1"
+			shift
+			;;
+		-c | --container)
+			use_container=1
+			shift
+			;;
+		-*)
+			printf '%s\n' "Error: unknown option: $1" >&2
+			exit 1
+			;;
+		*)
+			break
+			;;
+		esac
+	done
 
-  [ $# -eq 1 ] || {
-    printf '%s\n' 'Usage: fork go <branch> [-t|--target <base>]' >&2
-    exit 1
-  }
+	[ $# -eq 1 ] || {
+		printf '%s\n' 'Usage: fork go <branch> [-t|--target <base>] [-c|--container]' >&2
+		exit 1
+	}
 
-  branch="$1"
-  path="$(get_worktree_path "$branch")"
+	branch="$1"
+	path="$(get_worktree_path "$branch")"
 
-  created=0
-  if ! worktree_exists "$branch"; then
-    create_single_worktree "$branch" "$base_branch"
-    created=1
-  fi
+	created=0
+	if ! worktree_exists "$branch"; then
+		create_single_worktree "$branch" "$base_branch"
+		created=1
+	fi
 
-  printf '%s\n' "$path"
+	if [ "$use_container" = "1" ]; then
+		export FORK_CONTAINER_EXEC=1
+		container_name="$(get_container_name "$branch")"
 
-  if [ "${FORK_CD:-0}" != "1" ]; then
-    if [ $created -eq 1 ]; then
-      printf '%s\n' "Created and switched to worktree '$branch'" >&2
-    else
-      printf '%s\n' "Switched to worktree '$branch'" >&2
-    fi
-  fi
+		if ! container_exists "$container_name"; then
+			if [ "${FORK_CD:-0}" != "1" ]; then
+				printf '%s\n' "Creating container for '$branch'..." >&2
+			fi
+			create_container "$branch" "$path" || exit 1
+		elif ! container_is_running "$container_name"; then
+			if [ "${FORK_CD:-0}" != "1" ]; then
+				printf '%s\n' "Starting container for '$branch'..." >&2
+			fi
+			docker start "$container_name" >/dev/null 2>&1 || {
+				printf '%s\n' "Error: failed to start container: $container_name" >&2
+				exit 1
+			}
+		fi
+
+		printf '%s' "$(get_container_exec_command "$container_name")"
+	else
+		printf '%s\n' "$path"
+	fi
+
+	if [ "${FORK_CD:-0}" != "1" ]; then
+		if [ $created -eq 1 ]; then
+			if [ "$use_container" = "1" ]; then
+				printf '%s\n' "Created worktree and container for '$branch'" >&2
+			else
+				printf '%s\n' "Created and switched to worktree '$branch'" >&2
+			fi
+		else
+			if [ "$use_container" = "1" ]; then
+				printf '%s\n' "Switched to container for worktree '$branch'" >&2
+			else
+				printf '%s\n' "Switched to worktree '$branch'" >&2
+			fi
+		fi
+	fi
 }
 
 # Command: Remove worktree(s)
@@ -646,51 +908,58 @@ cmd_go() {
 #   [branch...] - Branch names (optional, defaults to current worktree)
 #   -f|--force - Force removal of unmerged or dirty branches
 #   -a|--all - Remove all worktrees
+#   -c|--container - Also remove associated containers
 # Outputs:
 #   Main repository path to stdout (for shell integration to cd)
 #   Status messages to stderr
 # Globals:
 #   FORK_CD - Set to 1 when called from shell integration
+#   FORK_CONTAINER - Set to 1 to also remove containers
 # Exits:
 #   1 if removal fails or not in worktree when no branch specified
 cmd_rm() {
-  force=0
-  all=0
-  branches=""
+	force=0
+	all=0
+	remove_containers="${FORK_CONTAINER:-0}"
+	branches=""
 
-  while [ $# -gt 0 ]; do
-    case "$1" in
-    -f | --force)
-      force=1
-      shift
-      ;;
-    -a | --all)
-      all=1
-      shift
-      ;;
-    -*)
-      printf '%s\n' "Error: unknown option: $1" >&2
-      exit 1
-      ;;
-    *)
-      branches="$branches $1"
-      shift
-      ;;
-    esac
-  done
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		-f | --force)
+			force=1
+			shift
+			;;
+		-a | --all)
+			all=1
+			shift
+			;;
+		-c | --container)
+			remove_containers=1
+			shift
+			;;
+		-*)
+			printf '%s\n' "Error: unknown option: $1" >&2
+			exit 1
+			;;
+		*)
+			branches="$branches $1"
+			shift
+			;;
+		esac
+	done
 
-  # Handle -a/--all flag
-  if [ $all -eq 1 ]; then
-    # Get all worktrees
-    worktree_base="$(get_worktree_base)"
-    if [ ! -d "$worktree_base" ]; then
-      printf '%s\n' "No worktrees to remove"
-      return 0
-    fi
+	# Handle -a/--all flag
+	if [ $all -eq 1 ]; then
+		# Get all worktrees
+		worktree_base="$(get_worktree_base)"
+		if [ ! -d "$worktree_base" ]; then
+			printf '%s\n' "No worktrees to remove"
+			return 0
+		fi
 
-    branches=""
-    tmpfile="${worktree_base}/.fork_rm_all.$$"
-    git worktree list --porcelain | awk '
+		branches=""
+		tmpfile="${worktree_base}/.fork_rm_all.$$"
+		git worktree list --porcelain | awk '
 			/^worktree / { path = substr($0, 10) }
 			/^branch / { branch = substr($0, 8); sub(/^refs\/heads\//, "", branch) }
 			/^$/ {
@@ -706,40 +975,44 @@ cmd_rm() {
 			}
 		' >"$tmpfile"
 
-    while IFS='|' read -r path branch; do
-      [ -n "$path" ] && [ -n "$branch" ] || continue
-      case "$path" in
-      "$worktree_base"/*)
-        branches="$branches $branch"
-        ;;
-      esac
-    done <"$tmpfile"
-    rm -f "$tmpfile"
-  elif [ -z "$branches" ]; then
-    # No branch specified, use current
-    branch="$(get_current_worktree_branch)" || {
-      printf '%s\n' 'Error: not in a worktree and no branch specified' >&2
-      exit 1
-    }
-    branches=" $branch"
-  fi
+		while IFS='|' read -r path branch; do
+			[ -n "$path" ] && [ -n "$branch" ] || continue
+			case "$path" in
+			"$worktree_base"/*)
+				branches="$branches $branch"
+				;;
+			esac
+		done <"$tmpfile"
+		rm -f "$tmpfile"
+	elif [ -z "$branches" ]; then
+		# No branch specified, use current
+		branch="$(get_current_worktree_branch)" || {
+			printf '%s\n' 'Error: not in a worktree and no branch specified' >&2
+			exit 1
+		}
+		branches=" $branch"
+	fi
 
-  # Get main repo root before removing (in case we're in a worktree being removed)
-  return_path="$(get_main_repo_root)"
+	# Get main repo root before removing (in case we're in a worktree being removed)
+	return_path="$(get_main_repo_root)"
 
-  # Remove each worktree
-  failed=0
-  for branch in $branches; do
-    remove_single_worktree "$branch" "$force" || failed=1
-  done
+	# Remove each worktree
+	failed=0
+	for branch in $branches; do
+		remove_single_worktree "$branch" "$force" || failed=1
 
-  printf '%s\n' "$return_path"
+		if [ "$remove_containers" = "1" ] && [ $failed -eq 0 ]; then
+			remove_container "$branch" || true
+		fi
+	done
 
-  if [ "${FORK_CD:-0}" != "1" ]; then
-    printf '%s\n' "Return path: $return_path" >&2
-  fi
+	printf '%s\n' "$return_path"
 
-  [ $failed -eq 0 ] || exit 1
+	if [ "${FORK_CD:-0}" != "1" ]; then
+		printf '%s\n' "Return path: $return_path" >&2
+	fi
+
+	[ $failed -eq 0 ] || exit 1
 }
 
 # Command: List worktrees
@@ -756,45 +1029,45 @@ cmd_rm() {
 # Exits:
 #   1 on invalid option
 cmd_list() {
-  filter_mode="all"
-  filter_dirty=""
+	filter_mode="all"
+	filter_dirty=""
 
-  while [ $# -gt 0 ]; do
-    case "$1" in
-    -m | --merged)
-      filter_mode="merged"
-      shift
-      ;;
-    -u | --unmerged)
-      filter_mode="unmerged"
-      shift
-      ;;
-    -d | --dirty)
-      filter_dirty="dirty"
-      shift
-      ;;
-    -c | --clean)
-      filter_dirty="clean"
-      shift
-      ;;
-    *)
-      printf '%s\n' "Error: unknown option: $1" >&2
-      exit 1
-      ;;
-    esac
-  done
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		-m | --merged)
+			filter_mode="merged"
+			shift
+			;;
+		-u | --unmerged)
+			filter_mode="unmerged"
+			shift
+			;;
+		-d | --dirty)
+			filter_dirty="dirty"
+			shift
+			;;
+		-c | --clean)
+			filter_dirty="clean"
+			shift
+			;;
+		*)
+			printf '%s\n' "Error: unknown option: $1" >&2
+			exit 1
+			;;
+		esac
+	done
 
-  worktree_base="$(get_worktree_base)"
+	worktree_base="$(get_worktree_base)"
 
-  if [ ! -d "$worktree_base" ]; then
-    printf '%s\n' 'No worktrees found'
-    return 0
-  fi
+	if [ ! -d "$worktree_base" ]; then
+		printf '%s\n' 'No worktrees found'
+		return 0
+	fi
 
-  tmpfile="${worktree_base}/.fork_list.$$"
-  : >"$tmpfile"
+	tmpfile="${worktree_base}/.fork_list.$$"
+	: >"$tmpfile"
 
-  git worktree list --porcelain | awk '
+	git worktree list --porcelain | awk '
 		/^worktree / { path = substr($0, 10) }
 		/^branch / { branch = substr($0, 8); sub(/^refs\/heads\//, "", branch) }
 		/^$/ {
@@ -809,55 +1082,55 @@ cmd_list() {
 			}
 		}
 	' | while IFS='|' read -r path branch; do
-    [ -n "$path" ] && [ -n "$branch" ] || continue
+		[ -n "$path" ] && [ -n "$branch" ] || continue
 
-    case "$path" in
-    "$worktree_base"/*)
-      merged=0
-      if is_branch_merged "$branch"; then
-        merged=1
-      fi
+		case "$path" in
+		"$worktree_base"/*)
+			merged=0
+			if is_branch_merged "$branch"; then
+				merged=1
+			fi
 
-      dirty=0
-      if is_worktree_dirty "$path"; then
-        dirty=1
-      fi
+			dirty=0
+			if is_worktree_dirty "$path"; then
+				dirty=1
+			fi
 
-      show=0
-      if [ "$filter_mode" = "all" ]; then
-        show=1
-      elif [ "$filter_mode" = "merged" ] && [ $merged -eq 1 ]; then
-        show=1
-      elif [ "$filter_mode" = "unmerged" ] && [ $merged -eq 0 ]; then
-        show=1
-      fi
+			show=0
+			if [ "$filter_mode" = "all" ]; then
+				show=1
+			elif [ "$filter_mode" = "merged" ] && [ $merged -eq 1 ]; then
+				show=1
+			elif [ "$filter_mode" = "unmerged" ] && [ $merged -eq 0 ]; then
+				show=1
+			fi
 
-      if [ $show -eq 1 ] && [ -n "$filter_dirty" ]; then
-        if [ "$filter_dirty" = "dirty" ] && [ $dirty -eq 0 ]; then
-          show=0
-        elif [ "$filter_dirty" = "clean" ] && [ $dirty -eq 1 ]; then
-          show=0
-        fi
-      fi
+			if [ $show -eq 1 ] && [ -n "$filter_dirty" ]; then
+				if [ "$filter_dirty" = "dirty" ] && [ $dirty -eq 0 ]; then
+					show=0
+				elif [ "$filter_dirty" = "clean" ] && [ $dirty -eq 1 ]; then
+					show=0
+				fi
+			fi
 
-      if [ $show -eq 1 ]; then
-        merge_status="unmerged"
-        [ $merged -eq 1 ] && merge_status="merged"
-        dirty_status="clean"
-        [ $dirty -eq 1 ] && dirty_status="dirty"
-        printf '%s\t%s\t%s\t%s\n' "$branch" "$merge_status" "$dirty_status" "$path" >>"$tmpfile"
-      fi
-      ;;
-    esac
-  done
+			if [ $show -eq 1 ]; then
+				merge_status="unmerged"
+				[ $merged -eq 1 ] && merge_status="merged"
+				dirty_status="clean"
+				[ $dirty -eq 1 ] && dirty_status="dirty"
+				printf '%s\t%s\t%s\t%s\n' "$branch" "$merge_status" "$dirty_status" "$path" >>"$tmpfile"
+			fi
+			;;
+		esac
+	done
 
-  if [ -s "$tmpfile" ]; then
-    cat "$tmpfile"
-    rm -f "$tmpfile"
-  else
-    rm -f "$tmpfile"
-    printf '%s\n' 'No worktrees found'
-  fi
+	if [ -s "$tmpfile" ]; then
+		cat "$tmpfile"
+		rm -f "$tmpfile"
+	else
+		rm -f "$tmpfile"
+		printf '%s\n' 'No worktrees found'
+	fi
 }
 
 # Command: Clean merged worktrees
@@ -873,31 +1146,31 @@ cmd_list() {
 # Exits:
 #   1 on invalid option
 cmd_clean() {
-  if [ $# -gt 0 ]; then
-    printf '%s\n' "Error: unknown option: $1" >&2
-    exit 1
-  fi
+	if [ $# -gt 0 ]; then
+		printf '%s\n' "Error: unknown option: $1" >&2
+		exit 1
+	fi
 
-  worktree_base="$(get_worktree_base)"
+	worktree_base="$(get_worktree_base)"
 
-  if [ ! -d "$worktree_base" ]; then
-    printf '%s\n' 'No worktrees to clean'
-    return 0
-  fi
+	if [ ! -d "$worktree_base" ]; then
+		printf '%s\n' 'No worktrees to clean'
+		return 0
+	fi
 
-  main_root="$(get_main_repo_root)"
-  current_branch=""
-  current_worktree_path=""
-  current_entry=""
+	main_root="$(get_main_repo_root)"
+	current_branch=""
+	current_worktree_path=""
+	current_entry=""
 
-  if current_branch="$(get_current_worktree_branch)"; then
-    current_worktree_path="$(get_worktree_path "$current_branch")"
-  else
-    current_branch=""
-  fi
+	if current_branch="$(get_current_worktree_branch)"; then
+		current_worktree_path="$(get_worktree_path "$current_branch")"
+	else
+		current_branch=""
+	fi
 
-  tmpfile="${worktree_base}/.fork_clean.$$"
-  git worktree list --porcelain | awk '
+	tmpfile="${worktree_base}/.fork_clean.$$"
+	git worktree list --porcelain | awk '
 		/^worktree / { path = substr($0, 10) }
 		/^branch / { branch = substr($0, 8); sub(/^refs\/heads\//, "", branch) }
 		/^$/ {
@@ -913,59 +1186,59 @@ cmd_clean() {
 		}
 	' >"$tmpfile"
 
-  queue_file="${worktree_base}/.fork_clean_queue.$$"
-  : >"$queue_file"
+	queue_file="${worktree_base}/.fork_clean_queue.$$"
+	: >"$queue_file"
 
-  while IFS='|' read -r path branch; do
-    [ -n "$path" ] && [ -n "$branch" ] || continue
+	while IFS='|' read -r path branch; do
+		[ -n "$path" ] && [ -n "$branch" ] || continue
 
-    case "$path" in
-    "$worktree_base"/*)
-      if is_branch_merged "$branch" && ! is_worktree_dirty "$path"; then
-        if [ -n "$current_branch" ] && [ "$branch" = "$current_branch" ] && [ -n "$current_worktree_path" ] && [ "$path" = "$current_worktree_path" ]; then
-          current_entry="$path|$branch"
-        else
-          printf '%s|%s\n' "$path" "$branch" >>"$queue_file"
-        fi
-      fi
-      ;;
-    esac
-  done <"$tmpfile"
+		case "$path" in
+		"$worktree_base"/*)
+			if is_branch_merged "$branch" && ! is_worktree_dirty "$path"; then
+				if [ -n "$current_branch" ] && [ "$branch" = "$current_branch" ] && [ -n "$current_worktree_path" ] && [ "$path" = "$current_worktree_path" ]; then
+					current_entry="$path|$branch"
+				else
+					printf '%s|%s\n' "$path" "$branch" >>"$queue_file"
+				fi
+			fi
+			;;
+		esac
+	done <"$tmpfile"
 
-  rm -f "$tmpfile"
+	rm -f "$tmpfile"
 
-  removed=0
+	removed=0
 
-  while IFS='|' read -r path branch; do
-    [ -n "$path" ] && [ -n "$branch" ] || continue
+	while IFS='|' read -r path branch; do
+		[ -n "$path" ] && [ -n "$branch" ] || continue
 
-    if (cd "$main_root" && git worktree remove "$path" 2>/dev/null) || (cd "$main_root" && git worktree remove --force "$path"); then
-      printf '%s\n' "Removed worktree: $branch" >&2
-      removed=1
-    fi
-  done <"$queue_file"
+		if (cd "$main_root" && git worktree remove "$path" 2>/dev/null) || (cd "$main_root" && git worktree remove --force "$path"); then
+			printf '%s\n' "Removed worktree: $branch" >&2
+			removed=1
+		fi
+	done <"$queue_file"
 
-  rm -f "$queue_file"
+	rm -f "$queue_file"
 
-  removed_current=0
-  if [ -n "$current_entry" ]; then
-    current_path=${current_entry%%|*}
-    current_branch_name=${current_entry#*|}
-    if (cd "$main_root" && git worktree remove "$current_path" 2>/dev/null) || (cd "$main_root" && git worktree remove --force "$current_path"); then
-      printf '%s\n' "Removed worktree: $current_branch_name" >&2
-      removed=1
-      removed_current=1
-    fi
-  fi
+	removed_current=0
+	if [ -n "$current_entry" ]; then
+		current_path=${current_entry%%|*}
+		current_branch_name=${current_entry#*|}
+		if (cd "$main_root" && git worktree remove "$current_path" 2>/dev/null) || (cd "$main_root" && git worktree remove --force "$current_path"); then
+			printf '%s\n' "Removed worktree: $current_branch_name" >&2
+			removed=1
+			removed_current=1
+		fi
+	fi
 
-  if [ $removed_current -eq 1 ]; then
-    printf '%s\n' "$main_root"
-    if [ "${FORK_CD:-0}" != "1" ]; then
-      printf '%s\n' "Return path: $main_root" >&2
-    fi
-  elif [ $removed -eq 0 ]; then
-    printf '%s\n' 'No worktrees removed'
-  fi
+	if [ $removed_current -eq 1 ]; then
+		printf '%s\n' "$main_root"
+		if [ "${FORK_CD:-0}" != "1" ]; then
+			printf '%s\n' "Return path: $main_root" >&2
+		fi
+	elif [ $removed -eq 0 ]; then
+		printf '%s\n' 'No worktrees removed'
+	fi
 }
 
 # Command: Generate shell integration function
@@ -980,77 +1253,82 @@ cmd_clean() {
 # Exits:
 #   1 if shell type unknown or $SHELL not set when no argument provided
 cmd_sh() {
-  shell="${1:-}"
+	shell="${1:-}"
 
-  if [ -z "$shell" ]; then
-    if [ -z "${SHELL:-}" ]; then
-      printf '%s\n' "Error: \$SHELL is not set and no shell specified" >&2
-      exit 1
-    fi
-    case "$SHELL" in
-    */bash)
-      shell="bash"
-      ;;
-    */zsh)
-      shell="zsh"
-      ;;
-    */fish)
-      shell="fish"
-      ;;
-    *)
-      printf '%s\n' "Error: unknown shell in \$SHELL: $SHELL (supported: bash, zsh, fish)" >&2
-      exit 1
-      ;;
-    esac
-  fi
+	if [ -z "$shell" ]; then
+		if [ -z "${SHELL:-}" ]; then
+			printf '%s\n' "Error: \$SHELL is not set and no shell specified" >&2
+			exit 1
+		fi
+		case "$SHELL" in
+		*/bash)
+			shell="bash"
+			;;
+		*/zsh)
+			shell="zsh"
+			;;
+		*/fish)
+			shell="fish"
+			;;
+		*)
+			printf '%s\n' "Error: unknown shell in \$SHELL: $SHELL (supported: bash, zsh, fish)" >&2
+			exit 1
+			;;
+		esac
+	fi
 
-  env_vars=""
-  env_list=""
-  if [ -n "${FORK_ENV:-}" ]; then
-    if [ -f "$FORK_ENV" ]; then
-      while IFS= read -r line || [ -n "$line" ]; do
-        line="${line%%#*}"
-        line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+	env_vars=""
+	env_list=""
+	if [ -n "${FORK_ENV:-}" ]; then
+		if [ -f "$FORK_ENV" ]; then
+			while IFS= read -r line || [ -n "$line" ]; do
+				line="${line%%#*}"
+				line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
 
-        [ -z "$line" ] && continue
+				[ -z "$line" ] && continue
 
-        case "$line" in
-        *=*)
-          var_name="${line%%=*}"
-          var_value="${line#*=}"
+				case "$line" in
+				*=*)
+					var_name="${line%%=*}"
+					var_value="${line#*=}"
 
-          var_value_escaped=$(printf "%s" "$var_value" | sed "s/'/'\\\\''/g")
+					var_value_escaped=$(printf "%s" "$var_value" | sed "s/'/'\\\\''/g")
 
-          case "$var_name" in
-          FORK_*)
-            if [ -z "$env_vars" ]; then
-              env_vars="$var_name='$var_value_escaped'"
-            else
-              env_vars="$env_vars $var_name='$var_value_escaped'"
-            fi
-            if [ -z "$env_list" ]; then
-              env_list="$var_name"
-            else
-              env_list="$env_list $var_name"
-            fi
-            ;;
-          esac
-          ;;
-        esac
-      done <"$FORK_ENV"
-    fi
-  fi
+					case "$var_name" in
+					FORK_*)
+						if [ -z "$env_vars" ]; then
+							env_vars="$var_name='$var_value_escaped'"
+						else
+							env_vars="$env_vars $var_name='$var_value_escaped'"
+						fi
+						if [ -z "$env_list" ]; then
+							env_list="$var_name"
+						else
+							env_list="$env_list $var_name"
+						fi
+						;;
+					esac
+					;;
+				esac
+			done <"$FORK_ENV"
+		fi
+	fi
 
-  case "$shell" in
-  bash | zsh)
-    cat <<EOF
+	case "$shell" in
+	bash | zsh)
+		cat <<EOF
 fork() {
     case "\$1" in
         co|go|main|rm|clean)
             local output
             output=\$(FORK_CD=1 $env_vars command fork "\$@")
             if [ \$? -eq 0 ] && [ -n "\$output" ]; then
-                builtin cd "\$output"
+                if [ "\${FORK_CONTAINER_EXEC:-0}" = "1" ]; then
+                    unset FORK_CONTAINER_EXEC
+                    eval "\$output"
+                else
+                    builtin cd "\$output"
+                fi
             fi
             ;;
         *)
@@ -1059,25 +1337,32 @@ fork() {
     esac
 }
 EOF
-    ;;
-  fish)
-    cat <<EOF
+		;;
+	fish)
+		cat <<EOF
 function fork
     switch \$argv[1]
         case co go main rm clean
             set output (env FORK_CD=1 $env_vars command fork \$argv)
-            and builtin cd \$output
+            if test \$status -eq 0; and test -n "\$output"
+                if test "\$FORK_CONTAINER_EXEC" = "1"
+                    set -e FORK_CONTAINER_EXEC
+                    eval \$output
+                else
+                    builtin cd \$output
+                end
+            end
         case '*'
             env $env_vars command fork \$argv
     end
 end
 EOF
-    ;;
-  *)
-    printf '%s\n' "Error: unknown shell: $shell (supported: bash, zsh, fish)" >&2
-    exit 1
-    ;;
-  esac
+		;;
+	*)
+		printf '%s\n' "Error: unknown shell: $shell (supported: bash, zsh, fish)" >&2
+		exit 1
+		;;
+	esac
 }
 
 # Main entry point and command dispatcher
