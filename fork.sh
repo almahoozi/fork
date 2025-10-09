@@ -915,6 +915,15 @@ cmd_co() {
 		printf '%s\n' 'Usage: fork co <branch> [-c|--container] [-k|--keep-alive]' >&2
 		exit 1
 	fi
+
+	if [ "$branch" = "main" ]; then
+		if [ "$use_container" = "1" ] && [ "${FORK_CD:-0}" != "1" ]; then
+			printf '%s\n' "Ignoring container options for 'main'; switching to main worktree" >&2
+		fi
+		cmd_main
+		return
+	fi
+
 	path="$(get_worktree_path "$branch")"
 
 	if ! worktree_exists "$branch"; then
@@ -1058,6 +1067,15 @@ cmd_go() {
 		printf '%s\n' 'Usage: fork go <branch> [-t|--target <base>] [-c|--container] [-k|--keep-alive]' >&2
 		exit 1
 	}
+
+	if [ "$branch" = "main" ]; then
+		if [ "$use_container" = "1" ] && [ "${FORK_CD:-0}" != "1" ]; then
+			printf '%s\n' "Ignoring container options for 'main'; switching to main worktree" >&2
+		fi
+		cmd_main
+		return
+	fi
+
 	path="$(get_worktree_path "$branch")"
 
 	created=0
