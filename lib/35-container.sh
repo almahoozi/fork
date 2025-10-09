@@ -28,8 +28,79 @@ get_container_image() {
 	printf '%s' "${FORK_CONTAINER_IMAGE:-ubuntu:latest}"
 }
 
+detect_auto_dockerfile() {
+	current_dir="$(pwd)"
+	repo_root="$(get_repo_root)"
+	processed=""
+
+	for dir in "$current_dir" "$current_dir/.docker" "$repo_root" "$repo_root/.docker"; do
+		if [ -n "$processed" ] && [ "$dir" = "$processed" ]; then
+			continue
+		fi
+		processed="$dir"
+
+		candidate="$dir/Dockerfile.fork"
+		if [ -f "$candidate" ]; then
+			printf '%s' "$candidate"
+			return
+		fi
+
+		for candidate in "$dir"/Dockerfile.fork.*; do
+			[ -f "$candidate" ] || continue
+			printf '%s' "$candidate"
+			return
+		done
+	done
+
+	printf '%s' ""
+}
+
 get_container_dockerfile() {
-	printf '%s' "${FORK_CONTAINER_DOCKERFILE:-}"
+	if [ -n "${FORK_CONTAINER_DOCKERFILE:-}" ] && [ -f "$FORK_CONTAINER_DOCKERFILE" ]; then
+		printf '%s' "$FORK_CONTAINER_DOCKERFILE"
+		return
+	fi
+
+	auto_dockerfile="$(detect_auto_dockerfile)"
+	if [ -n "$auto_dockerfile" ]; then
+		printf '%s' "$auto_dockerfile"
+		return
+	fi
+
+	if [ -n "${FORK_CONTAINER_DEFAULT_DOCKERFILE:-}" ] && [ -f "$FORK_CONTAINER_DEFAULT_DOCKERFILE" ]; then
+		printf '%s' "$FORK_CONTAINER_DEFAULT_DOCKERFILE"
+		return
+	fi
+
+	printf '%s' ""
+}
+
+get_dockerfile_image_tag() {
+	branch="$1"
+	dockerfile="$2"
+
+	if [ -z "$dockerfile" ]; then
+		printf 'fork_%s_image' "$branch"
+		return
+	fi
+
+	base="$(basename "$dockerfile")"
+	case "$base" in
+	Dockerfile.fork.*)
+		variant="${base#Dockerfile.fork.}"
+		variant="$(printf '%s' "$variant" | tr -c 'A-Za-z0-9_.-' '_')"
+		printf 'fork_%s_%s_image' "$branch" "$variant"
+		return
+		;;
+	Dockerfile.fork)
+		printf 'fork_%s_image' "$branch"
+		return
+		;;
+	*)
+		printf 'fork_%s_image' "$branch"
+		return
+		;;
+	esac
 }
 
 build_container_image() {
@@ -122,7 +193,7 @@ create_container() {
 	fi
 
 	if [ -n "$dockerfile" ]; then
-		image_tag="fork_${branch}_image"
+		image_tag="$(get_dockerfile_image_tag "$branch" "$dockerfile")"
 		if ! build_container_image "$dockerfile" "$image_tag"; then
 			return 1
 		fi
@@ -220,7 +291,7 @@ get_container_exec_command() {
 
 		if [ -n "$dockerfile" ]; then
 			branch="$(basename "$worktree_path")"
-			image="fork_${branch}_image"
+			image="$(get_dockerfile_image_tag "$branch" "$dockerfile")"
 		else
 			image="$(get_container_image)"
 		fi

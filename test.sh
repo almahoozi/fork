@@ -173,6 +173,29 @@ mkdir -p "$test_root"
 TEST_ROOT_REAL=$(cd "$test_root" && pwd -P)
 trap 'rm -rf "$test_root"' EXIT HUP INT TERM
 
+test_bin="$test_root/bin"
+mkdir -p "$test_bin"
+PATH="$test_bin:$PATH"
+export PATH
+
+cat >"$test_bin/docker" <<'EOF'
+#!/bin/sh
+cmd="$1"
+shift || true
+case "$cmd" in
+ps)
+	exit 0
+	;;
+run|start|rm|build|exec|info)
+	exit 0
+	;;
+*)
+	exit 0
+	;;
+esac
+EOF
+chmod +x "$test_bin/docker"
+
 FAIL_LOG="$test_root/failures.log"
 : >"$FAIL_LOG"
 
@@ -915,6 +938,131 @@ repo_name=$(basename "$REPO_DIR")
 assert_status 0 "$container_mount_status" "fork co -c succeeds"
 assert_contains ":/$repo_name:" "$container_mount_out" "fork mounts to /repo_name in container"
 assert_contains "-w /$repo_name" "$container_mount_out" "fork sets working directory to /repo_name"
+
+setup_repo "fork-container-auto-dockerfile"
+cat >"$REPO_DIR/Dockerfile.fork" <<'EOF'
+FROM alpine:3.19
+EOF
+run_fork_quiet new feature-auto-dockerfile
+auto_dockerfile_stdout="$test_root/auto_dockerfile.out"
+auto_dockerfile_stderr="$test_root/auto_dockerfile.err"
+set +e
+run_fork_capture_cd "$auto_dockerfile_stdout" "$auto_dockerfile_stderr" co feature-auto-dockerfile -c
+auto_dockerfile_status=$?
+set -e
+auto_dockerfile_out=$(cat "$auto_dockerfile_stdout")
+auto_dockerfile_err=$(cat "$auto_dockerfile_stderr")
+assert_status 0 "$auto_dockerfile_status" "fork detects Dockerfile.fork automatically"
+assert_contains "fork_feature-auto-dockerfile_image" "$auto_dockerfile_out" "auto dockerfile uses branch-scoped image tag"
+assert_not_contains "ubuntu:latest" "$auto_dockerfile_out" "auto dockerfile overrides default image"
+assert_not_contains "Dockerfile not found" "$auto_dockerfile_err" "auto dockerfile avoids missing dockerfile errors"
+
+setup_repo "fork-container-auto-dockerfile-ext"
+cat >"$REPO_DIR/Dockerfile.fork.dev" <<'EOF'
+FROM alpine:3.18
+EOF
+run_fork_quiet new feature-auto-dockerfile-ext
+auto_dockerfile_ext_stdout="$test_root/auto_dockerfile_ext.out"
+auto_dockerfile_ext_stderr="$test_root/auto_dockerfile_ext.err"
+set +e
+run_fork_capture_cd "$auto_dockerfile_ext_stdout" "$auto_dockerfile_ext_stderr" co feature-auto-dockerfile-ext -c
+auto_dockerfile_ext_status=$?
+set -e
+auto_dockerfile_ext_out=$(cat "$auto_dockerfile_ext_stdout")
+auto_dockerfile_ext_err=$(cat "$auto_dockerfile_ext_stderr")
+assert_status 0 "$auto_dockerfile_ext_status" "fork detects Dockerfile.fork.* automatically"
+assert_contains "fork_feature-auto-dockerfile-ext_dev_image" "$auto_dockerfile_ext_out" "dockerfile pattern with extension uses variant-specific tag"
+assert_not_contains "ubuntu:latest" "$auto_dockerfile_ext_out" "dockerfile pattern with extension overrides default image"
+assert_not_contains "Dockerfile not found" "$auto_dockerfile_ext_err" "dockerfile pattern with extension avoids missing dockerfile errors"
+
+setup_repo "fork-container-default-dockerfile"
+cat >"$REPO_DIR/default.Dockerfile" <<'EOF'
+FROM alpine:3.17
+EOF
+container_default_env_file="$REPO_DIR/.fork-default.env"
+cat >"$container_default_env_file" <<EOF
+FORK_CONTAINER=1
+FORK_CONTAINER_KEEP_ALIVE=1
+FORK_CONTAINER_DEFAULT_DOCKERFILE=$REPO_DIR/default.Dockerfile
+EOF
+run_fork_quiet new feature-default-dockerfile
+default_stdout="$test_root/default_dockerfile.out"
+default_stderr="$test_root/default_dockerfile.err"
+set +e
+(cd "$REPO_DIR" && env FORK_ENV="$container_default_env_file" sh "$FORK_SH" co feature-default-dockerfile -c >"$default_stdout" 2>"$default_stderr")
+default_status=$?
+set -e
+default_out=$(cat "$default_stdout")
+default_err=$(cat "$default_stderr")
+assert_status 0 "$default_status" "fork uses default Dockerfile when auto pattern missing"
+assert_contains "FORK_CONTAINER_EXEC=1" "$default_out" "default dockerfile outputs container exec command"
+assert_contains "exec -it" "$default_out" "default dockerfile keep-alive uses exec"
+assert_contains "Built image: fork_feature-default-dockerfile_image" "$default_err" "default dockerfile builds expected image tag"
+assert_contains "default.Dockerfile" "$default_err" "default dockerfile references configured path"
+
+setup_repo "fork-container-override-dockerfile"
+cat >"$REPO_DIR/default.Dockerfile" <<'EOF'
+FROM alpine:3.16
+EOF
+cat >"$REPO_DIR/override.Dockerfile" <<'EOF'
+FROM alpine:3.18
+EOF
+container_override_env_file="$REPO_DIR/.fork-override.env"
+cat >"$container_override_env_file" <<EOF
+FORK_CONTAINER=1
+FORK_CONTAINER_KEEP_ALIVE=1
+FORK_CONTAINER_DEFAULT_DOCKERFILE=$REPO_DIR/default.Dockerfile
+FORK_CONTAINER_DOCKERFILE=$REPO_DIR/override.Dockerfile
+EOF
+run_fork_quiet new feature-override-dockerfile
+override_stdout="$test_root/override_dockerfile.out"
+override_stderr="$test_root/override_dockerfile.err"
+set +e
+(cd "$REPO_DIR" && env FORK_ENV="$container_override_env_file" sh "$FORK_SH" co feature-override-dockerfile -c >"$override_stdout" 2>"$override_stderr")
+override_status=$?
+set -e
+override_out=$(cat "$override_stdout")
+override_err=$(cat "$override_stderr")
+assert_status 0 "$override_status" "fork uses override Dockerfile when configured"
+assert_contains "FORK_CONTAINER_EXEC=1" "$override_out" "override dockerfile outputs container exec command"
+assert_contains "exec -it" "$override_out" "override dockerfile keep-alive uses exec"
+assert_contains "Built image: fork_feature-override-dockerfile_image" "$override_err" "override dockerfile builds expected image tag"
+assert_contains "override.Dockerfile" "$override_err" "override dockerfile references override path"
+assert_not_contains "default.Dockerfile" "$override_err" "override dockerfile supersedes default path"
+
+setup_repo "fork-container-precedence-auto"
+cat >"$REPO_DIR/Dockerfile.fork" <<'EOF'
+FROM alpine:3.15
+EOF
+cat >"$REPO_DIR/default.Dockerfile" <<'EOF'
+FROM alpine:3.14
+EOF
+cat >"$REPO_DIR/override.Dockerfile" <<'EOF'
+FROM alpine:3.13
+EOF
+container_precedence_env_file="$REPO_DIR/.fork-precedence.env"
+cat >"$container_precedence_env_file" <<EOF
+FORK_CONTAINER=1
+FORK_CONTAINER_KEEP_ALIVE=1
+FORK_CONTAINER_DEFAULT_DOCKERFILE=$REPO_DIR/default.Dockerfile
+FORK_CONTAINER_DOCKERFILE=$REPO_DIR/other.Dockerfile
+EOF
+run_fork_quiet new feature-precedence
+auto_precedence_stdout="$test_root/auto_precedence.out"
+auto_precedence_stderr="$test_root/auto_precedence.err"
+set +e
+(cd "$REPO_DIR" && env FORK_ENV="$container_precedence_env_file" sh "$FORK_SH" co feature-precedence -c >"$auto_precedence_stdout" 2>"$auto_precedence_stderr")
+auto_precedence_status=$?
+set -e
+auto_precedence_out=$(cat "$auto_precedence_stdout")
+auto_precedence_err=$(cat "$auto_precedence_stderr")
+assert_status 0 "$auto_precedence_status" "auto dockerfile takes precedence over env overrides"
+assert_contains "FORK_CONTAINER_EXEC=1" "$auto_precedence_out" "auto precedence outputs container exec command"
+assert_contains "exec -it" "$auto_precedence_out" "auto precedence keep-alive uses exec"
+assert_contains "Built image: fork_feature-precedence_image" "$auto_precedence_err" "auto precedence builds expected tag"
+assert_contains "Dockerfile.fork" "$auto_precedence_err" "auto precedence references dockerfile.fork"
+assert_not_contains "other.Dockerfile" "$auto_precedence_err" "auto precedence ignores override when override file not present"
+assert_not_contains "default.Dockerfile" "$auto_precedence_err" "auto precedence ignores default when auto file present"
 
 setup_repo "fork-container-flag-k"
 run_fork_quiet new feature-flag-k
