@@ -229,6 +229,7 @@ Configuration:
     FORK_DIR_PATTERN=../{repo}_forks/{branch}
     FORK_CONTAINER=1
     FORK_CONTAINER_IMAGE=ubuntu:latest
+    FORK_CONTAINER_DEFAULT_DOCKERFILE=./default.Dockerfile
     FORK_CONTAINER_DOCKERFILE=/path/to/Dockerfile
     FORK_CONTAINER_NAME=myproject
     FORK_CONTAINER_RUNTIME=podman
@@ -243,7 +244,9 @@ Environment Variables:
   FORK_DIR_PATTERN            Example config variable (displays on startup if set)
   FORK_CONTAINER              Set to 1 to enable container mode by default
   FORK_CONTAINER_IMAGE        Container image to use (default: ubuntu:latest)
-  FORK_CONTAINER_DOCKERFILE   Path to Dockerfile to build instead of using FORK_CONTAINER_IMAGE
+  FORK_CONTAINER_DEFAULT_DOCKERFILE
+                               Fallback Dockerfile when no Dockerfile.fork* exists
+  FORK_CONTAINER_DOCKERFILE   Override Dockerfile when no Dockerfile.fork* exists
   FORK_CONTAINER_NAME         Container name prefix (default: none)
   FORK_CONTAINER_RUNTIME      Container runtime to use (default: docker, also supports: podman)
   FORK_CONTAINER_KEEP_ALIVE   Set to 1 to keep containers running (default: 0, containers auto-removed on exit)
@@ -263,9 +266,12 @@ Container Mode:
   Mount point: /{repo_name} (read-write access to worktree only)
   
   Image Sources:
+    - Automatic: Use Dockerfile.fork or Dockerfile.fork.* in the current directory when present
+      (Dockerfile.fork.* adds its suffix to the image tag: fork_{branch}_{suffix}_image)
+    - FORK_CONTAINER_DOCKERFILE: Override Dockerfile when no auto match exists
+    - FORK_CONTAINER_DEFAULT_DOCKERFILE: Fallback Dockerfile when no auto match or override exists
     - FORK_CONTAINER_IMAGE: Use a pre-built image (default: ubuntu:latest)
-    - FORK_CONTAINER_DOCKERFILE: Build from a Dockerfile (overrides IMAGE if set)
-      Images are built with tag: fork_{branch}_image
+      Images are built with tag: fork_{branch}_image unless a suffix is present
 
 Examples:
   fork new feature-x                   Create worktree for feature-x
@@ -396,8 +402,79 @@ get_container_image() {
 	printf '%s' "${FORK_CONTAINER_IMAGE:-ubuntu:latest}"
 }
 
+detect_auto_dockerfile() {
+	current_dir="$(pwd)"
+	repo_root="$(get_repo_root)"
+	processed=""
+
+	for dir in "$current_dir" "$current_dir/.docker" "$repo_root" "$repo_root/.docker"; do
+		if [ -n "$processed" ] && [ "$dir" = "$processed" ]; then
+			continue
+		fi
+		processed="$dir"
+
+		candidate="$dir/Dockerfile.fork"
+		if [ -f "$candidate" ]; then
+			printf '%s' "$candidate"
+			return
+		fi
+
+		for candidate in "$dir"/Dockerfile.fork.*; do
+			[ -f "$candidate" ] || continue
+			printf '%s' "$candidate"
+			return
+		done
+	done
+
+	printf '%s' ""
+}
+
 get_container_dockerfile() {
-	printf '%s' "${FORK_CONTAINER_DOCKERFILE:-}"
+	if [ -n "${FORK_CONTAINER_DOCKERFILE:-}" ] && [ -f "$FORK_CONTAINER_DOCKERFILE" ]; then
+		printf '%s' "$FORK_CONTAINER_DOCKERFILE"
+		return
+	fi
+
+	auto_dockerfile="$(detect_auto_dockerfile)"
+	if [ -n "$auto_dockerfile" ]; then
+		printf '%s' "$auto_dockerfile"
+		return
+	fi
+
+	if [ -n "${FORK_CONTAINER_DEFAULT_DOCKERFILE:-}" ] && [ -f "$FORK_CONTAINER_DEFAULT_DOCKERFILE" ]; then
+		printf '%s' "$FORK_CONTAINER_DEFAULT_DOCKERFILE"
+		return
+	fi
+
+	printf '%s' ""
+}
+
+get_dockerfile_image_tag() {
+	branch="$1"
+	dockerfile="$2"
+
+	if [ -z "$dockerfile" ]; then
+		printf 'fork_%s_image' "$branch"
+		return
+	fi
+
+	base="$(basename "$dockerfile")"
+	case "$base" in
+	Dockerfile.fork.*)
+		variant="${base#Dockerfile.fork.}"
+		variant="$(printf '%s' "$variant" | tr -c 'A-Za-z0-9_.-' '_')"
+		printf 'fork_%s_%s_image' "$branch" "$variant"
+		return
+		;;
+	Dockerfile.fork)
+		printf 'fork_%s_image' "$branch"
+		return
+		;;
+	*)
+		printf 'fork_%s_image' "$branch"
+		return
+		;;
+	esac
 }
 
 build_container_image() {
@@ -490,7 +567,7 @@ create_container() {
 	fi
 
 	if [ -n "$dockerfile" ]; then
-		image_tag="fork_${branch}_image"
+		image_tag="$(get_dockerfile_image_tag "$branch" "$dockerfile")"
 		if ! build_container_image "$dockerfile" "$image_tag"; then
 			return 1
 		fi
@@ -588,7 +665,7 @@ get_container_exec_command() {
 
 		if [ -n "$dockerfile" ]; then
 			branch="$(basename "$worktree_path")"
-			image="fork_${branch}_image"
+			image="$(get_dockerfile_image_tag "$branch" "$dockerfile")"
 		else
 			image="$(get_container_image)"
 		fi
@@ -838,6 +915,15 @@ cmd_co() {
 		printf '%s\n' 'Usage: fork co <branch> [-c|--container] [-k|--keep-alive]' >&2
 		exit 1
 	fi
+
+	if [ "$branch" = "main" ]; then
+		if [ "$use_container" = "1" ] && [ "${FORK_CD:-0}" != "1" ]; then
+			printf '%s\n' "Ignoring container options for 'main'; switching to main worktree" >&2
+		fi
+		cmd_main
+		return
+	fi
+
 	path="$(get_worktree_path "$branch")"
 
 	if ! worktree_exists "$branch"; then
@@ -981,6 +1067,15 @@ cmd_go() {
 		printf '%s\n' 'Usage: fork go <branch> [-t|--target <base>] [-c|--container] [-k|--keep-alive]' >&2
 		exit 1
 	}
+
+	if [ "$branch" = "main" ]; then
+		if [ "$use_container" = "1" ] && [ "${FORK_CD:-0}" != "1" ]; then
+			printf '%s\n' "Ignoring container options for 'main'; switching to main worktree" >&2
+		fi
+		cmd_main
+		return
+	fi
+
 	path="$(get_worktree_path "$branch")"
 
 	created=0

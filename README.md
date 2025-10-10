@@ -163,8 +163,15 @@ fork go feature-x -c -k
 export FORK_CONTAINER_IMAGE=ubuntu:22.04
 fork go feature-x -c
 
-# Use a Dockerfile
+# Use a Dockerfile override when no Dockerfile.fork* is present
 export FORK_CONTAINER_DOCKERFILE=./dev.Dockerfile
+fork go feature-x -c
+
+# Provide a default fallback when no Dockerfile.fork* is present
+export FORK_CONTAINER_DEFAULT_DOCKERFILE=./default.Dockerfile
+fork go feature-x -c
+
+# Or just drop Dockerfile.fork (or Dockerfile.fork.<variant>) in your repo
 fork go feature-x -c
 ```
 
@@ -172,16 +179,20 @@ fork go feature-x -c
 
 Set these in your `~/.config/fork/config.env` or shell environment:
 
+If your repository contains `Dockerfile.fork` or `Dockerfile.fork.<variant>`, fork automatically uses it.
+
 ```bash
-FORK_CONTAINER=1                              # Enable container mode by default
-FORK_CONTAINER_IMAGE=ubuntu:latest            # Base image to use
-FORK_CONTAINER_DOCKERFILE=/path/to/Dockerfile # Build from Dockerfile (overrides IMAGE)
-FORK_CONTAINER_RUNTIME=docker                 # Runtime: docker or podman
-FORK_CONTAINER_NAME=myproject                 # Container name prefix
-FORK_CONTAINER_KEEP_ALIVE=1                   # Keep containers running in background
+FORK_CONTAINER=1                                # Enable container mode by default
+FORK_CONTAINER_IMAGE=ubuntu:latest              # Base image to use
+FORK_CONTAINER_DEFAULT_DOCKERFILE=./default.Dockerfile
+                                               # Fallback when no Dockerfile.fork* is present
+FORK_CONTAINER_DOCKERFILE=/path/to/Dockerfile   # Explicit override when no Dockerfile.fork* is present
+FORK_CONTAINER_RUNTIME=docker                   # Runtime: docker or podman
+FORK_CONTAINER_NAME=myproject                   # Container name prefix
+FORK_CONTAINER_KEEP_ALIVE=1                     # Keep containers running in background
 ```
 
-**Note**: If `FORK_CONTAINER_DOCKERFILE` is set, images are built with the tag `fork_{branch}_image` and used instead of pulling `FORK_CONTAINER_IMAGE`.
+**Note**: When `Dockerfile.fork*`, `FORK_CONTAINER_DOCKERFILE`, or `FORK_CONTAINER_DEFAULT_DOCKERFILE` is used, images are built with tags like `fork_{branch}_image`. If the Dockerfile filename is `Dockerfile.fork.<suffix>`, the suffix is included: `fork_{branch}_{suffix}_image`.
 
 ### Container Behavior
 
@@ -279,10 +290,15 @@ FORK_DEBUG=1
 - Default: `ubuntu:latest`
 - Can be any Docker/Podman image
 
-**`FORK_CONTAINER_DOCKERFILE`**: Path to Dockerfile to build
+**`FORK_CONTAINER_DEFAULT_DOCKERFILE`**: Fallback Dockerfile
 
-- If set, builds image from Dockerfile instead of using `FORK_CONTAINER_IMAGE`
+- Used when no `Dockerfile.fork*` files are present and no override is set
 - Built images are tagged as `fork_{branch}_image`
+
+**`FORK_CONTAINER_DOCKERFILE`**: Override Dockerfile
+
+- Highest priority fallback when no `Dockerfile.fork*` files are present
+- Built images are tagged as `fork_{branch}_image` (or `fork_{branch}_{suffix}_image` for `Dockerfile.fork.*`)
 
 **`FORK_CONTAINER_RUNTIME`**: Container runtime
 
