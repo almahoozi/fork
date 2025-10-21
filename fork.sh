@@ -489,10 +489,13 @@ build_container_image() {
 
 	dockerfile_dir="$(dirname "$dockerfile")"
 
-	"$runtime" build -t "$image_tag" -f "$dockerfile" "$dockerfile_dir" >/dev/null 2>&1 || {
-		printf '%s\n' "Error: failed to build image from Dockerfile: $dockerfile" >&2
+	printf '%s\n' "Building image: $image_tag from $dockerfile" >&2
+
+	if ! output=$("$runtime" build -t "$image_tag" -f "$dockerfile" "$dockerfile_dir" 2>&1); then
+		printf '%s\n' "Error: failed to build image from $dockerfile" >&2
+		printf '%s\n' "$output" >&2
 		return 1
-	}
+	fi
 
 	if [ "${FORK_CD:-0}" != "1" ]; then
 		printf '%s\n' "Built image: $image_tag from $dockerfile" >&2
@@ -656,9 +659,10 @@ get_container_exec_command() {
 	runtime="$(get_container_runtime)"
 	repo_name="$(get_repo_name)"
 	keep_alive="${FORK_CONTAINER_KEEP_ALIVE:-0}"
+	shell="${FORK_SHELL:-/bin/sh}"
 
 	if [ "$keep_alive" = "1" ]; then
-		printf 'FORK_CONTAINER_EXEC=1 %s exec -it %s /bin/sh' "$runtime" "$container_name"
+		printf 'FORK_CONTAINER_EXEC=1 %s exec -it %s %s' "$runtime" "$container_name" "$shell"
 	else
 		worktree_path_abs="$(cd "$worktree_path" && pwd)"
 		dockerfile="$(get_container_dockerfile)"
@@ -670,8 +674,8 @@ get_container_exec_command() {
 			image="$(get_container_image)"
 		fi
 
-		printf 'FORK_CONTAINER_EXEC=1 %s run --rm -it --name %s -v %s:/%s:rw -w /%s %s /bin/sh' \
-			"$runtime" "$container_name" "$worktree_path_abs" "$repo_name" "$repo_name" "$image"
+		printf 'FORK_CONTAINER_EXEC=1 %s run --rm -it --name %s -v %s:/%s:rw -w /%s %s %s' \
+			"$runtime" "$container_name" "$worktree_path_abs" "$repo_name" "$repo_name" "$image" "$shell"
 	fi
 }
 
@@ -955,6 +959,14 @@ cmd_co() {
 					exit 1
 				}
 			fi
+		else
+			dockerfile="$(get_container_dockerfile)"
+			if [ -n "$dockerfile" ]; then
+				image_tag="$(get_dockerfile_image_tag "$branch" "$dockerfile")"
+				if ! build_container_image "$dockerfile" "$image_tag"; then
+					return 1
+				fi
+			fi
 		fi
 
 		export FORK_CONTAINER_KEEP_ALIVE="$keep_alive"
@@ -1107,6 +1119,14 @@ cmd_go() {
 					printf '%s\n' "Error: failed to start container: $container_name" >&2
 					exit 1
 				}
+			fi
+		else
+			dockerfile="$(get_container_dockerfile)"
+			if [ -n "$dockerfile" ]; then
+				image_tag="$(get_dockerfile_image_tag "$branch" "$dockerfile")"
+				if ! build_container_image "$dockerfile" "$image_tag"; then
+					return 1
+				fi
 			fi
 		fi
 

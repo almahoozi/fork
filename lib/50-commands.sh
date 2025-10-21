@@ -129,6 +129,14 @@ cmd_co() {
 					exit 1
 				}
 			fi
+		else
+			dockerfile="$(get_container_dockerfile)"
+			if [ -n "$dockerfile" ]; then
+				image_tag="$(get_dockerfile_image_tag "$branch" "$dockerfile")"
+				if ! build_container_image "$dockerfile" "$image_tag"; then
+					return 1
+				fi
+			fi
 		fi
 
 		export FORK_CONTAINER_KEEP_ALIVE="$keep_alive"
@@ -281,6 +289,14 @@ cmd_go() {
 					printf '%s\n' "Error: failed to start container: $container_name" >&2
 					exit 1
 				}
+			fi
+		else
+			dockerfile="$(get_container_dockerfile)"
+			if [ -n "$dockerfile" ]; then
+				image_tag="$(get_dockerfile_image_tag "$branch" "$dockerfile")"
+				if ! build_container_image "$dockerfile" "$image_tag"; then
+					return 1
+				fi
 			fi
 		fi
 
